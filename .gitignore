@@ -1,0 +1,12 @@
+### VisualStudioCode ###
+.vscode/*
+
+# Object files
+*.o
+*.so
+*.dll
+*.obj
+
+# Executables
+*.exe
+*.out
