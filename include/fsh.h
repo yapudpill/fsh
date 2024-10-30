@@ -8,4 +8,7 @@ extern char HOME[PATH_MAX];
 extern char CWD[PATH_MAX];
 
 extern char *construct_prompt();
+extern int init_env_vars();
+extern int init_wd_vars();
+
 #endif

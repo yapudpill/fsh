@@ -18,20 +18,31 @@ char *construct_prompt() {
   return prompt;
 }
 
+int init_env_vars(char *envp[]) {
+  while(strncmp(*envp, "HOME=",5) != 0) {
+    envp++;
+  }
+  strcpy(HOME, *(envp)+5);
+  return EXIT_SUCCESS;
+}
+
+int init_wd_vars() {
+  char *cwd = getcwd(NULL, 0);
+
+  if(cwd == NULL) return EXIT_FAILURE;
+
+  strcpy(CWD, cwd);
+  strcpy(PREV_WORKING_DIR, CWD);
+
+  return EXIT_SUCCESS;
+}
+
 
 int main(int argc, char* argv[], char *envp[]) {
   char *ligne, *prompt;
 
-  // initialize global variable
-  strcpy(CWD, getcwd(NULL, 0));
-  strcpy(PREV_WORKING_DIR, CWD);
-
-  // extract HOME from env variables
-  while(strncmp(*envp, "HOME=",5) != 0) {
-    envp++;
-  }
-
-  strcpy(HOME, *(envp)+5);
+  if(init_wd_vars() == EXIT_FAILURE ||
+   init_env_vars(envp) == EXIT_FAILURE) return EXIT_FAILURE;
 
   while(1) {
     prompt = construct_prompt(); // FIXME : Should not be reconstructed every time
@@ -39,5 +50,6 @@ int main(int argc, char* argv[], char *envp[]) {
     add_history(ligne);
     PREV_RETURN_VALUE = exec_simple_cmd(ligne);
   }
+
   return EXIT_SUCCESS;
 }
