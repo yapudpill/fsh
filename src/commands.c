@@ -40,6 +40,7 @@ int ftype(char *arg) {
     perror("ftype-stat");
     return EXIT_FAILURE;
   }
+
   switch(sb.st_mode & __S_IFMT) {
     case __S_IFREG:
       printf("regular file\n");
@@ -56,6 +57,7 @@ int ftype(char *arg) {
     default:
       printf("other\n");
   }
+
   return EXIT_SUCCESS;
 }
 
@@ -80,8 +82,31 @@ int exec_internal_cmd(char *cmd, char *arg) {
 }
 
 int exec_external_cmd(char *cmd, char **argv) {
-  if(execvp(cmd, argv) == -1) return EXIT_FAILURE;
+  char *err;
+  int r;
+  switch(r = fork()) {
+    case -1:
+      err = "fork";
+      goto error;
+    case 0:
+      if(execvp(cmd, argv) == -1){
+        err = "execvp";
+        goto error;
+      }
+      break;
+    default:
+      if(wait() == -1) {
+        err = "wait";
+        goto error;
+      }
+      break;
+  }
+
   return EXIT_SUCCESS;
+
+  error:
+  perror(err);
+  return EXIT_FAILURE;
 }
 
 

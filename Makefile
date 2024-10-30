@@ -7,11 +7,11 @@ objects := $(patsubst src/%.c,build/%.o,$(wildcard src/*.c))
 all: fsh
 
 clean:
-	@rm -rf *.o build/*.o fsh
+	rm -rf *.o build/*.o fsh
 
 build/%.o: src/%.c
-	@mkdir -p build
-	@$(CC) $(CFLAGS) -c $< -o $@
+	mkdir -p build
+	$(CC) $(CFLAGS) -c $< -o $@
 
 fsh: $(objects)
-	@$(CC) $(CFLAGS) -o fsh $^ -lreadline
+	$(CC) $(CFLAGS) -o fsh $^ -lreadline
