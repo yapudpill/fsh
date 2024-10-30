@@ -1,5 +1,5 @@
-#include "../include/commands.h"
-#include "../include/fsh.h"
+#include <commands.h>
+#include <fsh.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>

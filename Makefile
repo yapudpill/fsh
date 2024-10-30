@@ -1,18 +1,17 @@
 CC=gcc
-CFLAGS=-Wall
+CFLAGS=-Wall -Iinclude
 # TODO : Add a debug mode
+
+objects := $(patsubst src/%.c,build/%.o,$(wildcard src/*.c))
+
 all: fsh
 
 clean:
 	@rm -rf *.o build/*.o fsh
 
-build/commands.o: src/commands.c # FIXME : use wildcards to automate build process
+build/%.o: src/%.c
 	@mkdir -p build
-	@$(CC) $(CFLAGS) -c src/commands.c -o build/commands.o
+	@$(CC) $(CFLAGS) -c $< -o $@
 
-build/fsh.o: fsh.c
-	@mkdir -p build
-	@$(CC) $(CFLAGS) -c fsh.c -o build/fsh.o
-
-fsh: build/commands.o build/fsh.o
+fsh: $(objects)
 	@$(CC) $(CFLAGS) -o fsh $^ -lreadline
