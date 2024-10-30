@@ -2,6 +2,7 @@
 .vscode/*
 
 # Object files
+builld/*
 *.o
 *.so
 *.dll

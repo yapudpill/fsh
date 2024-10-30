@@ -5,6 +5,9 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+
 
 int pwd() {
   char *cwd = getcwd(NULL, 0);
@@ -19,7 +22,7 @@ int pwd() {
 int cd(char *arg) {
   int ret = 0;
 
-  if(arg == NULL) ret = chdir(HOME); // FIXME : is relying on the argument being null really a good idea ?
+  if(arg == NULL) ret = chdir(HOME);
   else if(strcmp(arg, "-") == 0) ret = chdir(PREV_WORKING_DIR);
   else ret = chdir(arg);
 
@@ -35,6 +38,7 @@ int cd(char *arg) {
 }
 
 int ftype(char *arg) {
+  if(arg == NULL) return EXIT_FAILURE;
   struct stat sb;
   if(stat(arg, &sb) == -1) {
     perror("ftype-stat");
@@ -62,28 +66,29 @@ int ftype(char *arg) {
 }
 
 int exec_internal_cmd(char *cmd, char *arg) {
+  if(cmd == NULL) goto error;
   if(strcmp(cmd, "ftype") == 0) {
     if(ftype(arg) == EXIT_FAILURE) goto error;
   } else if (strcmp(cmd, "exit") == 0) {
     int val;
-    if(sscanf(arg, "%d", &val) == 0) goto error;
+    if(arg == NULL || sscanf(arg, "%d", &val) == 0) goto error;
     exit(val);
   } else if (strcmp(cmd, "cd") == 0) {
     if(cd(arg) == EXIT_FAILURE) goto error;
   } else if (strcmp(cmd, "pwd") == 0) {
     if(pwd() == EXIT_FAILURE) goto error;
-  }
+  } else goto error;
 
   return EXIT_SUCCESS;
-
   error:
-  perror("internal-cmd");
+  fprintf(stderr, "Internal command error\n");
   return EXIT_FAILURE;
 }
 
 int exec_external_cmd(char *cmd, char **argv) {
   char *err;
-  int r;
+  int r, wstat;
+  if(cmd == NULL) return EXIT_FAILURE;
   switch(r = fork()) {
     case -1:
       err = "fork";
@@ -95,7 +100,7 @@ int exec_external_cmd(char *cmd, char **argv) {
       }
       break;
     default:
-      if(wait() == -1) {
+      if(wait(&wstat) == -1) { // FIXME: We should probably use wstat, right ?
         err = "wait";
         goto error;
       }

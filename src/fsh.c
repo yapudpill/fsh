@@ -39,16 +39,16 @@ int init_wd_vars() {
 
 
 int main(int argc, char* argv[], char *envp[]) {
-  char *ligne, *prompt;
+  char *line, *prompt;
 
   if(init_wd_vars() == EXIT_FAILURE ||
    init_env_vars(envp) == EXIT_FAILURE) return EXIT_FAILURE;
 
   while(1) {
     prompt = construct_prompt(); // FIXME : Should not be reconstructed every time
-    ligne = readline(prompt);
-    add_history(ligne);
-    PREV_RETURN_VALUE = exec_simple_cmd(ligne);
+    line = readline(prompt);
+    add_history(line);
+    PREV_RETURN_VALUE = exec_simple_cmd(line);
   }
 
   return EXIT_SUCCESS;
