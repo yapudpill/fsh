@@ -8,8 +8,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-
-int pwd() {
+int cmd_pwd(int _argc, char **_argv) {
   char *cwd = getcwd(NULL, 0);
   if(cwd == NULL) {
     perror("pwd-getcwd");
@@ -19,12 +18,12 @@ int pwd() {
   return EXIT_SUCCESS;
 }
 
-int cd(char *arg) {
+int cmd_cd(int argc, char **argv) {
   int ret = 0;
 
-  if(arg == NULL) ret = chdir(HOME);
-  else if(strcmp(arg, "-") == 0) ret = chdir(PREV_WORKING_DIR);
-  else ret = chdir(arg);
+  if(argc == 1) ret = chdir(HOME);
+  else if(strcmp(argv[1], "-") == 0) ret = chdir(PREV_WORKING_DIR);
+  else ret = chdir(argv[1]);
 
   if(ret == -1) {
     perror("chdir");
@@ -37,10 +36,10 @@ int cd(char *arg) {
   return EXIT_SUCCESS;
 }
 
-int ftype(char *arg) {
-  if(arg == NULL) return EXIT_FAILURE;
+int cmd_ftype(int argc, char **argv) {
+  if(argc < 2) return EXIT_FAILURE;
   struct stat sb;
-  if(stat(arg, &sb) == -1) {
+  if(stat(argv[1], &sb) == -1) {
     perror("ftype-stat");
     return EXIT_FAILURE;
   }
@@ -65,59 +64,88 @@ int ftype(char *arg) {
   return EXIT_SUCCESS;
 }
 
-int exec_internal_cmd(char *cmd, char *arg) {
-  if(cmd == NULL) goto error;
-  if(strcmp(cmd, "ftype") == 0) {
-    if(ftype(arg) == EXIT_FAILURE) goto error;
-  } else if (strcmp(cmd, "exit") == 0) {
-    int val;
-    if(arg == NULL || sscanf(arg, "%d", &val) == 0) goto error;
-    exit(val);
-  } else if (strcmp(cmd, "cd") == 0) {
-    if(cd(arg) == EXIT_FAILURE) goto error;
-  } else if (strcmp(cmd, "pwd") == 0) {
-    if(pwd() == EXIT_FAILURE) goto error;
-  } else goto error;
-
-  return EXIT_SUCCESS;
-  error:
-  fprintf(stderr, "Internal command error\n");
-  return EXIT_FAILURE;
+int cmd_exit(int argc, char **argv) {
+  int val;
+  if (argc <= 1)
+    val = 0;
+  else if (sscanf(argv[1], "%d", &val) == 0)
+    return EXIT_FAILURE;
+  exit(val);
 }
 
-int exec_external_cmd(char *cmd, char **argv) {
-  char *err;
-  int r, wstat;
+int exec_external_cmd(int _argc, char **argv) {
+  char *err = "";
+  int wstat;
+  char *cmd = argv[0];
   if(cmd == NULL) return EXIT_FAILURE;
-  switch(r = fork()) {
+  switch(fork()) {
     case -1:
       err = "fork";
-      goto error;
+      break;
     case 0:
       if(execvp(cmd, argv) == -1){
         err = "execvp";
-        goto error;
       }
       break;
     default:
-      if(wait(&wstat) == -1) { // FIXME: We should probably use wstat, right ?
+      if(wait(&wstat) == -1) {
         err = "wait";
-        goto error;
+      }
+      if (WIFEXITED(wstat)) {
+        return WEXITSTATUS(wstat);
+      }
+      if (WIFSIGNALED(wstat)) {
+        int sig = WTERMSIG(wstat);
+        printf("Process terminated by signal %d\n", sig);
+        return 128 + sig; // Convention used by bash
       }
       break;
   }
 
-  return EXIT_SUCCESS;
-
-  error:
   perror(err);
   return EXIT_FAILURE;
 }
 
+int exec_cmd(int argc, char **argv) {
+  cmd_func cmd_function;
+  char *cmd = argv[0];
+  if (strcmp(cmd, "ftype") == 0) {
+    cmd_function = &cmd_ftype;
+  } else if (strcmp(cmd, "exit") == 0) {
+    cmd_function = &cmd_exit;
+  } else if (strcmp(cmd, "cd") == 0) {
+    cmd_function = &cmd_cd;
+  } else if (strcmp(cmd, "pwd") == 0) {
+    cmd_function = &cmd_pwd;
+  } else cmd_function = exec_external_cmd;
 
-int exec_simple_cmd(char *input) { // FIXME: Make this support external commands as well
-  char *cmd, *arg;
-  cmd = strtok(input, " \n");
-  arg = strtok(NULL, " \n");
-  return exec_internal_cmd(cmd, arg);
+  int res = cmd_function(argc, argv);
+
+  return res;
+}
+
+int parse_and_exec_simple_cmd(char *input) { // TODO: use the syntax tree once we implement it instead of doing the parsing here
+  int argc = 1;
+  char *first_token;
+  first_token = strtok(input, " \n");
+  if (first_token == NULL) {
+    return EXIT_SUCCESS;
+  }
+  while (strtok(NULL, " \n") != NULL) {
+    argc++;
+  }
+  char **argv = malloc(argc + 1);
+  argv[0] = first_token;
+  argv[argc] = NULL; // per the POSIX spec: The argv arrays are each terminated by a null pointer. The null pointer terminating the argv array is not counted in argc
+  int i=1;
+  for (char *p = input; i < argc; p++) {
+    if (*p == '\0') {
+      argv[i] = p + 1;
+      i++;
+    }
+  }
+
+  int res = exec_cmd(argc, argv);
+  free(argv);
+  return res;
 }

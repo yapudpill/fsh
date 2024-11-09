@@ -48,7 +48,7 @@ int main(int argc, char* argv[], char *envp[]) {
     prompt = construct_prompt(); // FIXME : Should not be reconstructed every time
     line = readline(prompt);
     add_history(line);
-    PREV_RETURN_VALUE = exec_simple_cmd(line);
+    PREV_RETURN_VALUE = parse_and_exec_simple_cmd(line);
   }
 
   return EXIT_SUCCESS;
