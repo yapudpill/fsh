@@ -74,22 +74,23 @@ int cmd_exit(int argc, char **argv) {
 }
 
 int exec_external_cmd(int _argc, char **argv) {
-  char *err = "";
   int wstat;
   char *cmd = argv[0];
-  if(cmd == NULL) return EXIT_FAILURE;
-  switch(fork()) {
+  switch (fork()) {
     case -1:
-      err = "fork";
-      break;
+      perror("fork");
+      return EXIT_FAILURE;
     case 0:
-      if(execvp(cmd, argv) == -1){
-        err = "execvp";
+      if (execvp(cmd, argv) == -1) {
+        perror("execvp");
+        // We are in the child process, so we have to immediately exit if something goes wrong, otherwise there will be
+        // an additional child `fsh` process every time we enter a non-existent command
+        exit(EXIT_FAILURE);
       }
-      break;
     default:
-      if(wait(&wstat) == -1) {
-        err = "wait";
+      if (wait(&wstat) == -1) {
+        perror("wait");
+        return EXIT_FAILURE;
       }
       if (WIFEXITED(wstat)) {
         return WEXITSTATUS(wstat);
@@ -99,11 +100,8 @@ int exec_external_cmd(int _argc, char **argv) {
         printf("Process terminated by signal %d\n", sig);
         return 128 + sig; // Convention used by bash
       }
-      break;
+      return EXIT_FAILURE;
   }
-
-  perror(err);
-  return EXIT_FAILURE;
 }
 
 int exec_cmd(int argc, char **argv) {
