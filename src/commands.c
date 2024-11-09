@@ -123,6 +123,7 @@ int exec_cmd(int argc, char **argv) {
 }
 
 int parse_and_exec_simple_cmd(char *input) { // TODO: use the syntax tree once we implement it instead of doing the parsing here
+  if (input == NULL) exit(EXIT_SUCCESS);
   int argc = 1;
   char *first_token;
   first_token = strtok(input, " \n");
