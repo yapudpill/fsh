@@ -22,7 +22,13 @@ int pwd() {
 int cd(char *arg) {
   int ret = 0;
 
-  if(arg == NULL) ret = chdir(HOME);
+  if(arg == NULL) {
+    if (HOME == NULL) {
+      fprintf(stderr, "fsh: cd: HOME not set\n");
+      return EXIT_FAILURE;
+    }
+    ret = chdir(HOME);
+  }
   else if(strcmp(arg, "-") == 0) ret = chdir(PREV_WORKING_DIR);
   else ret = chdir(arg);
 

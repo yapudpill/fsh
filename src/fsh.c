@@ -8,7 +8,7 @@
 
 // global variables' declaration
 char PREV_WORKING_DIR[PATH_MAX];
-char HOME[PATH_MAX];
+char *HOME;
 int PREV_RETURN_VALUE;
 char CWD[PATH_MAX];
 
@@ -18,11 +18,8 @@ char *construct_prompt() {
   return prompt;
 }
 
-int init_env_vars(char *envp[]) {
-  while(strncmp(*envp, "HOME=",5) != 0) {
-    envp++;
-  }
-  strcpy(HOME, *(envp)+5);
+int init_env_vars() {
+  HOME = getenv("HOME");
   return EXIT_SUCCESS;
 }
 
@@ -38,11 +35,11 @@ int init_wd_vars() {
 }
 
 
-int main(int argc, char* argv[], char *envp[]) {
+int main(int argc, char* argv[]) {
   char *line, *prompt;
 
   if(init_wd_vars() == EXIT_FAILURE ||
-   init_env_vars(envp) == EXIT_FAILURE) return EXIT_FAILURE;
+   init_env_vars() == EXIT_FAILURE) return EXIT_FAILURE;
 
   while(1) {
     prompt = construct_prompt(); // FIXME : Should not be reconstructed every time

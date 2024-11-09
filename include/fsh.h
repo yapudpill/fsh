@@ -4,7 +4,7 @@
 
 extern char PREV_WORKING_DIR[PATH_MAX];
 extern int PREV_RETURN_VALUE;
-extern char HOME[PATH_MAX];
+extern char *HOME;
 extern char CWD[PATH_MAX];
 
 extern char *construct_prompt();
