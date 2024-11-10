@@ -78,7 +78,7 @@ int cmd_ftype(int argc, char **argv) {
 int cmd_exit(int argc, char **argv) {
   int val;
   if (argc <= 1)
-    val = 0;
+    val = PREV_RETURN_VALUE;
   else if (sscanf(argv[1], "%d", &val) == 0)
     return EXIT_FAILURE;
   exit(val);
@@ -108,7 +108,7 @@ int exec_external_cmd(int _argc, char **argv) {
       if (WIFSIGNALED(wstat)) {
         int sig = WTERMSIG(wstat);
         printf("Process terminated by signal %d\n", sig);
-        return 128 + sig; // Convention used by bash
+        return -1;
       }
       return EXIT_FAILURE;
   }
@@ -133,7 +133,7 @@ int exec_cmd(int argc, char **argv) {
 }
 
 int parse_and_exec_simple_cmd(char *input) { // TODO: use the syntax tree once we implement it instead of doing the parsing here
-  if (input == NULL) exit(EXIT_SUCCESS);
+  if (input == NULL) cmd_exit(1, NULL);
   int argc = 1;
   char *first_token;
   first_token = strtok(input, " \n");
