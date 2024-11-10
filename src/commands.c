@@ -9,25 +9,25 @@
 #include <sys/wait.h>
 
 
-int pwd() {
+int cmd_pwd(int _argc, char **_argv) {
   // Considering that the variable CWD is always updated using `getcwd` at every cwd change, it should be safe to assume
   // it already contains the right path, so there is no need for another `getcwd`
   printf("%s\n", CWD);
   return EXIT_SUCCESS;
 }
 
-int cd(char *arg) {
+int cmd_cd(int argc, char **argv) {
   int ret = 0;
 
-  if(arg == NULL) {
+  if(argc == 1) {
     if (HOME == NULL) {
       fprintf(stderr, "fsh: cd: HOME not set\n");
       return EXIT_FAILURE;
     }
     ret = chdir(HOME);
   }
-  else if(strcmp(arg, "-") == 0) ret = chdir(PREV_WORKING_DIR);
-  else ret = chdir(arg);
+  else if(strcmp(argv[1], "-") == 0) ret = chdir(PREV_WORKING_DIR);
+  else ret = chdir(argv[1]);
 
   if(ret == -1) {
     perror("chdir");
@@ -47,10 +47,10 @@ int cd(char *arg) {
   return EXIT_SUCCESS;
 }
 
-int ftype(char *arg) {
-  if(arg == NULL) return EXIT_FAILURE;
+int cmd_ftype(int argc, char **argv) {
+  if(argc < 2) return EXIT_FAILURE;
   struct stat sb;
-  if(stat(arg, &sb) == -1) {
+  if(stat(argv[1], &sb) == -1) {
     perror("ftype-stat");
     return EXIT_FAILURE;
   }
@@ -75,59 +75,86 @@ int ftype(char *arg) {
   return EXIT_SUCCESS;
 }
 
-int exec_internal_cmd(char *cmd, char *arg) {
-  if(cmd == NULL) goto error;
-  if(strcmp(cmd, "ftype") == 0) {
-    if(ftype(arg) == EXIT_FAILURE) goto error;
-  } else if (strcmp(cmd, "exit") == 0) {
-    int val;
-    if(arg == NULL || sscanf(arg, "%d", &val) == 0) goto error;
-    exit(val);
-  } else if (strcmp(cmd, "cd") == 0) {
-    if(cd(arg) == EXIT_FAILURE) goto error;
-  } else if (strcmp(cmd, "pwd") == 0) {
-    if(pwd() == EXIT_FAILURE) goto error;
-  } else goto error;
-
-  return EXIT_SUCCESS;
-  error:
-  fprintf(stderr, "Internal command error\n");
-  return EXIT_FAILURE;
+int cmd_exit(int argc, char **argv) {
+  int val;
+  if (argc <= 1)
+    val = PREV_RETURN_VALUE;
+  else if (sscanf(argv[1], "%d", &val) == 0)
+    return EXIT_FAILURE;
+  exit(val);
 }
 
-int exec_external_cmd(char *cmd, char **argv) {
-  char *err;
-  int r, wstat;
-  if(cmd == NULL) return EXIT_FAILURE;
-  switch(r = fork()) {
+int exec_external_cmd(int _argc, char **argv) {
+  int wstat;
+  char *cmd = argv[0];
+  switch (fork()) {
     case -1:
-      err = "fork";
-      goto error;
+      perror("fork");
+      return EXIT_FAILURE;
     case 0:
-      if(execvp(cmd, argv) == -1){
-        err = "execvp";
-        goto error;
-      }
-      break;
+      execvp(cmd, argv);
+      perror("execvp");
+      // We are in the child process, so we have to immediately exit if something goes wrong, otherwise there will be
+      // an additional child `fsh` process every time we enter a non-existent command
+      exit(EXIT_FAILURE);
     default:
-      if(wait(&wstat) == -1) { // FIXME: We should probably use wstat, right ?
-        err = "wait";
-        goto error;
+      if (wait(&wstat) == -1) {
+        perror("wait");
+        return EXIT_FAILURE;
       }
-      break;
+      if (WIFEXITED(wstat)) {
+        return WEXITSTATUS(wstat);
+      }
+      if (WIFSIGNALED(wstat)) {
+        int sig = WTERMSIG(wstat);
+        printf("Process terminated by signal %d\n", sig);
+        return -1;
+      }
+      return EXIT_FAILURE;
+  }
+}
+
+int exec_cmd(int argc, char **argv) {
+  cmd_func cmd_function;
+  char *cmd = argv[0];
+  if (strcmp(cmd, "ftype") == 0) {
+    cmd_function = &cmd_ftype;
+  } else if (strcmp(cmd, "exit") == 0) {
+    cmd_function = &cmd_exit;
+  } else if (strcmp(cmd, "cd") == 0) {
+    cmd_function = &cmd_cd;
+  } else if (strcmp(cmd, "pwd") == 0) {
+    cmd_function = &cmd_pwd;
+  } else cmd_function = exec_external_cmd;
+
+  int res = cmd_function(argc, argv);
+
+  return res;
+}
+
+int parse_and_exec_simple_cmd(char *input) { // TODO: use the syntax tree once we implement it instead of doing the parsing here
+  if (input == NULL) cmd_exit(1, NULL);
+  int argc = 1;
+  char *first_token;
+  first_token = strtok(input, " \n");
+  if (first_token == NULL) {
+    return EXIT_SUCCESS;
+  }
+  while (strtok(NULL, " \n") != NULL) {
+    argc++;
+  }
+  char **argv = malloc((argc + 1) * sizeof(char*));
+  argv[0] = first_token;
+  argv[argc] = NULL; // per the POSIX spec: The argv arrays are each terminated by a null pointer. The null pointer terminating the argv array is not counted in argc
+  int i=1;
+  for (char *p = input; i < argc; p++) {
+    if (*p == '\0') {
+      argv[i] = p + 1;
+      i++;
+    }
   }
 
-  return EXIT_SUCCESS;
-
-  error:
-  perror(err);
-  return EXIT_FAILURE;
-}
-
-
-int exec_simple_cmd(char *input) { // FIXME: Make this support external commands as well
-  char *cmd, *arg;
-  cmd = strtok(input, " \n");
-  arg = strtok(NULL, " \n");
-  return exec_internal_cmd(cmd, arg);
+  int res = exec_cmd(argc, argv);
+  free(argv);
+  return res;
 }
