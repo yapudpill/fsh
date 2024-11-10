@@ -92,12 +92,11 @@ int exec_external_cmd(int _argc, char **argv) {
       perror("fork");
       return EXIT_FAILURE;
     case 0:
-      if (execvp(cmd, argv) == -1) {
-        perror("execvp");
-        // We are in the child process, so we have to immediately exit if something goes wrong, otherwise there will be
-        // an additional child `fsh` process every time we enter a non-existent command
-        exit(EXIT_FAILURE);
-      }
+      execvp(cmd, argv);
+      perror("execvp");
+      // We are in the child process, so we have to immediately exit if something goes wrong, otherwise there will be
+      // an additional child `fsh` process every time we enter a non-existent command
+      exit(EXIT_FAILURE);
     default:
       if (wait(&wstat) == -1) {
         perror("wait");
@@ -144,7 +143,7 @@ int parse_and_exec_simple_cmd(char *input) { // TODO: use the syntax tree once w
   while (strtok(NULL, " \n") != NULL) {
     argc++;
   }
-  char **argv = malloc(argc + 1);
+  char **argv = malloc((argc + 1) * sizeof(char*));
   argv[0] = first_token;
   argv[argc] = NULL; // per the POSIX spec: The argv arrays are each terminated by a null pointer. The null pointer terminating the argv array is not counted in argc
   int i=1;
