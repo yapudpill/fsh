@@ -12,10 +12,40 @@ char *HOME;
 int PREV_RETURN_VALUE;
 char CWD[PATH_MAX];
 
-char *construct_prompt() {
-  char *prompt = malloc((strlen(CWD)+6)*sizeof(char));
-  snprintf(prompt, strlen(CWD)+6,"[%d]%s$ ",PREV_RETURN_VALUE, CWD); // FIXME : Should handle coloring and cutting the string if too long
-  return prompt;
+char prompt[52] = {0};
+
+void update_prompt(void) {
+  int space_left = 30;
+  char *head = prompt;
+
+  // Color of the return code
+  int color = PREV_RETURN_VALUE ? 91 : 32;
+
+  // Return code itself
+  char code[4];
+  if (PREV_RETURN_VALUE == -1) strcpy(code, "SIG");
+  else snprintf(code, 3, "%d", PREV_RETURN_VALUE);
+
+  // Add colors and "[code]" to the prompt
+  int written = sprintf(head, "\001\033[%dm\002[%s]\001\033[36m\002", color, code);
+  head += written;
+  space_left -= strlen(code) + 2;
+
+  // Add cwd to the prompt
+  int len = strlen(CWD);
+  if (len <= space_left - 2) { // Keep 2 char for "$ " at the end
+    strcpy(head, CWD);
+    head += len;
+  } else { // CWD is too big
+    strcpy(head, "...");
+    head += 3;
+    space_left -= 3;
+    strcpy(head, CWD + len - space_left + 2);
+    head += space_left - 2;
+  }
+
+  strcpy(head, "\001\033[00m\002$ ");
+  return;
 }
 
 int init_env_vars() {
@@ -34,17 +64,16 @@ int init_wd_vars() {
 
 
 int main(int argc, char* argv[]) {
-  char *line, *prompt;
+  char *line;
 
   if(init_wd_vars() == EXIT_FAILURE ||
    init_env_vars() == EXIT_FAILURE) return EXIT_FAILURE;
 
   while(1) {
-    prompt = construct_prompt(); // FIXME : Should not be reconstructed every time
+    update_prompt();
     line = readline(prompt);
     add_history(line);
     PREV_RETURN_VALUE = exec_simple_cmd(line);
-    free(prompt);
     free(line);
   }
 
