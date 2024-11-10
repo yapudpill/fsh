@@ -10,12 +10,9 @@
 
 
 int pwd() {
-  char *cwd = getcwd(NULL, 0);
-  if(cwd == NULL) {
-    perror("pwd-getcwd");
-    return EXIT_FAILURE;
-  }
-  printf("%s\n", cwd);
+  // Considering that the variable CWD is always updated using `getcwd` at every cwd change, it should be safe to assume
+  // it already contains the right path, so there is no need for another `getcwd`
+  printf("%s\n", CWD);
   return EXIT_SUCCESS;
 }
 
@@ -38,7 +35,14 @@ int cd(char *arg) {
   }
 
   strcpy(PREV_WORKING_DIR, CWD);
-  strcpy(CWD, getcwd(NULL, 0));
+  if (getcwd(CWD, PATH_MAX) == NULL) {
+    // If we ever meet this condition, it means something very wrong has happened, or the directory has been altered at
+    // the wrong moment.
+
+    // FIXME: decide what to do in this situation. Maybe try to revert to the previous directory, and if that fails too, give up and exit the shell.
+    perror("getcwd");
+    exit(EXIT_FAILURE);
+  }
 
   return EXIT_SUCCESS;
 }

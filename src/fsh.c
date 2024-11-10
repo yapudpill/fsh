@@ -24,13 +24,11 @@ int init_env_vars() {
 }
 
 int init_wd_vars() {
-  char *cwd = getcwd(NULL, 0);
+  if (getcwd(CWD, PATH_MAX) == NULL) {
+    return EXIT_FAILURE;
+  }
 
-  if(cwd == NULL) return EXIT_FAILURE;
-
-  strcpy(CWD, cwd);
   strcpy(PREV_WORKING_DIR, CWD);
-
   return EXIT_SUCCESS;
 }
 
@@ -46,6 +44,8 @@ int main(int argc, char* argv[]) {
     line = readline(prompt);
     add_history(line);
     PREV_RETURN_VALUE = exec_simple_cmd(line);
+    free(prompt);
+    free(line);
   }
 
   return EXIT_SUCCESS;
