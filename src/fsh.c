@@ -74,7 +74,7 @@ int main(int argc, char* argv[]) {
     update_prompt();
     line = readline(prompt);
     add_history(line);
-    PREV_RETURN_VALUE = exec_simple_cmd(line);
+    PREV_RETURN_VALUE = parse_and_exec_simple_cmd(line);
     free(line);
   }
 
