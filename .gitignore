@@ -1,8 +1,9 @@
-### VisualStudioCode ###
+# IDEs
 .vscode/*
+.idea/*
 
 # Object files
-builld/*
+build/*
 *.o
 *.so
 *.dll
@@ -12,3 +13,6 @@ builld/*
 *.exe
 *.out
 fsh
+
+# valgrind coredumps:
+vgcore.*

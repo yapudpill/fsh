@@ -8,20 +8,24 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
+
 int cmd_pwd(int _argc, char **_argv) {
-  char *cwd = getcwd(NULL, 0);
-  if(cwd == NULL) {
-    perror("pwd-getcwd");
-    return EXIT_FAILURE;
-  }
-  printf("%s\n", cwd);
+  // Considering that the variable CWD is always updated using `getcwd` at every cwd change, it should be safe to assume
+  // it already contains the right path, so there is no need for another `getcwd`
+  printf("%s\n", CWD);
   return EXIT_SUCCESS;
 }
 
 int cmd_cd(int argc, char **argv) {
   int ret = 0;
 
-  if(argc == 1) ret = chdir(HOME);
+  if(argc == 1) {
+    if (HOME == NULL) {
+      fprintf(stderr, "fsh: cd: HOME not set\n");
+      return EXIT_FAILURE;
+    }
+    ret = chdir(HOME);
+  }
   else if(strcmp(argv[1], "-") == 0) ret = chdir(PREV_WORKING_DIR);
   else ret = chdir(argv[1]);
 
@@ -31,7 +35,14 @@ int cmd_cd(int argc, char **argv) {
   }
 
   strcpy(PREV_WORKING_DIR, CWD);
-  strcpy(CWD, getcwd(NULL, 0));
+  if (getcwd(CWD, PATH_MAX) == NULL) {
+    // If we ever meet this condition, it means something very wrong has happened, or the directory has been altered at
+    // the wrong moment.
+
+    // FIXME: decide what to do in this situation. Maybe try to revert to the previous directory, and if that fails too, give up and exit the shell.
+    perror("getcwd");
+    exit(EXIT_FAILURE);
+  }
 
   return EXIT_SUCCESS;
 }
