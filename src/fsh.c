@@ -12,10 +12,39 @@ char *HOME;
 int PREV_RETURN_VALUE;
 char CWD[PATH_MAX];
 
-char *construct_prompt() {
-  char *prompt = malloc((strlen(CWD)+6)*sizeof(char));
-  snprintf(prompt, strlen(CWD)+6,"[%d]%s$ ",PREV_RETURN_VALUE, CWD); // FIXME : Should handle coloring and cutting the string if too long
-  return prompt;
+char prompt[52];
+
+
+void update_prompt(void) {
+  char *head = prompt;
+
+  // Return code
+  head += sprintf(head, "\001\033[%dm\002", PREV_RETURN_VALUE ? 91 : 32);
+
+  int code_len;
+  if (PREV_RETURN_VALUE == -1) {
+    strcpy(head, "[SIG]");
+    code_len = 5;
+  } else {
+    code_len = sprintf(head, "[%d]", PREV_RETURN_VALUE);
+  }
+  head += code_len;
+
+  // CWD
+  strcpy(head, "\001\033[36m\002");
+  head += 7;
+
+  int space_left = 30 - code_len - 2; // Keep 2 bytes for "$ " at the end
+  int len = strlen(CWD);
+  if (len <= space_left) {
+    strcpy(head, CWD);
+    head += len;
+  } else { // CWD is too big
+    head += sprintf(head, "...%s", CWD + len - space_left);
+  }
+
+  strcpy(head, "\001\033[00m\002$ ");
+  return;
 }
 
 int init_env_vars() {
@@ -34,17 +63,18 @@ int init_wd_vars() {
 
 
 int main(int argc, char* argv[]) {
-  char *line, *prompt;
+  rl_outstream = stderr;
+
+  char *line;
 
   if(init_wd_vars() == EXIT_FAILURE ||
    init_env_vars() == EXIT_FAILURE) return EXIT_FAILURE;
 
   while(1) {
-    prompt = construct_prompt(); // FIXME : Should not be reconstructed every time
+    update_prompt();
     line = readline(prompt);
     add_history(line);
     PREV_RETURN_VALUE = parse_and_exec_simple_cmd(line);
-    free(prompt);
     free(line);
   }
 
