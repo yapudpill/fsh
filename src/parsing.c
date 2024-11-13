@@ -128,38 +128,31 @@ int parse_simple(struct cmd *out) {
   while (token && !is_simple_end(token)) {
     if (strcmp(token, "<") == 0) {
       detail->in = strtok(NULL, " ");
-      token = strtok(NULL, " ");
+    } else {
+      char **name;
+      enum redir_type* type;
+      if (token[0] == '2') {
+        name = &(detail->err);
+        type = &(detail->err_type);
+        token++;
+      } else {
+        name = &(detail->out);
+        type = &(detail->out_type);
+      }
 
-    } else if (strcmp(token, ">") == 0) {
-      detail->out = strtok(NULL, " ");
-      detail->out_type = REDIR_NORMAL;
-      token = strtok(NULL, " ");
+      *name = strtok(NULL, " ");
 
-    } else if (strcmp(token, ">>") == 0) {
-      detail->out = strtok(NULL, " ");
-      detail->out_type = REDIR_APPEND;
-      token = strtok(NULL, " ");
-
-    } else if (strcmp(token, ">|") == 0) {
-      detail->out = strtok(NULL, " ");
-      detail->out_type = REDIR_OVERWRITE;
-      token = strtok(NULL, " ");
-
-    } else if (strcmp(token, "2>") == 0) {
-      detail->err = strtok(NULL, " ");
-      detail->err_type = REDIR_NORMAL;
-      token = strtok(NULL, " ");
-
-    } else if (strcmp(token, "2>>") == 0) {
-      detail->err = strtok(NULL, " ");
-      detail->err_type = REDIR_APPEND;
-      token = strtok(NULL, " ");
-
-    } else if (strcmp(token, "2>|") == 0) {
-      detail->err = strtok(NULL, " ");
-      detail->err_type = REDIR_OVERWRITE;
-      token = strtok(NULL, " ");
+      if (strcmp(token, ">") == 0) {
+        *type = REDIR_NORMAL;
+      } else if (strcmp(token, ">>") == 0) {
+        *type = REDIR_APPEND;
+      } else if (strcmp(token, ">|") == 0) {
+        *type = REDIR_OVERWRITE;
+      } else {
+        return -1; // Unknown redirection symbol
+      }
     }
+    token = strtok(NULL, " ");
   }
   return 0;
 }
