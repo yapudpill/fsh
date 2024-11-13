@@ -14,8 +14,9 @@ parse_* functions except parse_semicolon and parse_pipe consider that `out`
 points to an empty already allocated cmd that is ready to be filled.
 
 parse_semicolon and parse_pipe considers that `out` already contains the first
-command of the pair. They modifies `out` so that is becomes a pair containing
-the original `out` and the rest of the command.
+command of the pair. They use insert_pair that modifies `out` so that is becomes
+a pair containing the original `out` and an empty second field. They then fill
+this second fiels.
 
 After the execution of any parse_* function, `token` points to the next token to
 be scanned, in particular, it is not be part of the command that have just been
@@ -32,8 +33,12 @@ int parse_cmd(struct cmd *out);
 // Parses a simple command with eventual redirections
 int parse_simple(struct cmd *out);
 
+// Parses a semicolon. Assumes `out' is cmd1 and make it `cmd1 ; (rest)'
 int parse_semicolon(struct cmd *out);
+
+// Parses a pipe. Assumes `out' is cmd1 and make it `(cmd1 | next_cmd)'
 int parse_pipe(struct cmd *out);
+
 int parse_for(struct cmd *out);
 int parse_if_else(struct cmd *out);
 
@@ -57,16 +62,18 @@ struct cmd *parse(char *line) {
 int parse_cmd(struct cmd *out) {
   while (token && strcmp(token, "{") && strcmp(token, "}")) {
     if (strcmp(token, ";") == 0) {
-      // if (out->type == CMD_EMPTY || parse_semicolon(out) == -1) return -1;
+      if (out->type == CMD_EMPTY || parse_semicolon(out) == -1) return -1;
 
     } else if (strcmp(token, "|") == 0) {
-      // if ((out->type != CMD_SIMPLE && out->type != CMD_PIPE) || parse_pipe(out) == -1) return -1;
+      if ((out->type != CMD_SIMPLE && out->type != CMD_PIPE) || parse_pipe(out) == -1) return -1;
 
     } else if (strcmp(token, "for") == 0) {
       // if (out->type != CMD_EMPTY || parse_for(out) == -1) return -1;
+      return -1;
 
     } else if (strcmp(token, "if") == 0) {
       // if (out->type != CMD_EMPTY || parse_if_else(out) == -1) return -1;
+      return -1;
 
     } else {
       if (out->type != CMD_EMPTY || parse_simple(out) == -1) return -1;
@@ -155,6 +162,54 @@ int parse_simple(struct cmd *out) {
     token = strtok(NULL, " ");
   }
   return 0;
+}
+
+int insert_pair(struct cmd *root, enum cmd_type type) {
+  /* We assume that `out' already contains the first command of the pair.
+   * We modify it so that is becomes a pair containing the original `out'
+   * and an empty second member ready to be filled. */
+
+  struct cmd *copy = malloc(sizeof(struct cmd));
+  if (!copy) return -1;
+  copy->type = root->type;
+  copy->detail = root->detail;
+
+  struct cmd_pair *new_detail = malloc(sizeof(struct cmd_pair));
+  if (!new_detail) {
+    // No need to recursively free because `out' haven't changed yet
+    free(copy);
+    return -1;
+  }
+  new_detail->cmd1 = copy;
+
+  root->type = type;
+  root->detail = new_detail;
+
+  new_detail->cmd2 = calloc(1, sizeof(struct cmd));
+  if (!new_detail->cmd2) return -1;
+  return 0;
+}
+
+int parse_semicolon(struct cmd *out) {
+  /* We make a pair containing the original `out' and the rest of the
+   * expression (because ; has low priority). */
+
+  if (insert_pair(out, CMD_SEMICOLON) == -1) return -1;
+
+  struct cmd *next = ((struct cmd_pair *)(out->detail))->cmd2;
+  token = strtok(NULL, " ");
+  return parse_cmd(next);
+}
+
+int parse_pipe(struct cmd *out) {
+  /* We make a pair containing the original `out' and only the next command
+   * (because | has high priority). */
+
+  if (insert_pair(out, CMD_PIPE) == -1) return -1;
+
+  struct cmd *next = ((struct cmd_pair *)(out->detail))->cmd2;
+  token = strtok(NULL, " ");
+  return parse_simple(next);
 }
 
 void free_cmd(struct cmd *cmd) {
