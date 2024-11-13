@@ -1,10 +1,14 @@
 #include <fsh.h>
-#include <commands.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <readline/readline.h>
 #include <readline/history.h>
+
+#include <cmd_types.h>
+#include <parsing.h>
+#include <debug.h>
 
 // global variables' declaration
 char PREV_WORKING_DIR[PATH_MAX];
@@ -76,7 +80,16 @@ int main(int argc, char* argv[]) {
     update_prompt();
     line = readline(prompt);
     add_history(line);
-    PREV_RETURN_VALUE = parse_and_exec_simple_cmd(line);
+
+    struct cmd *cmd = parse(line);
+    if (!cmd) {
+      printf("invalid command\n");
+      continue;
+    }
+
+    print_cmd(cmd);
+
+    free_cmd(cmd);
     free(line);
   }
 
