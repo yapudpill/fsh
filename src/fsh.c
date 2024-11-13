@@ -78,7 +78,7 @@ int main(int argc, char* argv[]) {
 
   while(1) {
     update_prompt();
-    line = readline(prompt);
+    line = readline(prompt); // TODO: if line is NULL we should exit
     add_history(line);
 
     struct cmd *cmd = parse(line);

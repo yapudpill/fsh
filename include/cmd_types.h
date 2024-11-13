@@ -4,8 +4,6 @@
 enum cmd_type {
   CMD_EMPTY, // MUST be number 0
   CMD_SIMPLE,
-  CMD_PIPE,
-  CMD_SEMICOLON,
   CMD_IF_ELSE,
   CMD_FOR
 };
@@ -16,9 +14,17 @@ enum redir_type {
   REDIR_OVERWRITE
 };
 
+enum next_type {
+  NEXT_NONE, // MUST be number 0
+  NEXT_PIPE,
+  NEXT_SEMICOLON
+};
+
 struct cmd {
-  enum cmd_type type;
+  enum cmd_type cmd_type;
   void *detail;
+  enum next_type next_type;
+  struct cmd *next;
 };
 
 struct cmd_simple {
@@ -29,11 +35,6 @@ struct cmd_simple {
   enum redir_type out_type;
   char *err;
   enum redir_type err_type;
-};
-
-struct cmd_pair {
-  struct cmd *cmd1;
-  struct cmd *cmd2;
 };
 
 struct cmd_if_else {

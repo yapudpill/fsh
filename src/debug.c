@@ -26,19 +26,9 @@ void print_redir(int device, char *name, enum redir_type type) {
 }
 
 void print_cmd_aux(struct cmd *cmd) {
-  switch (cmd->type) {
+  switch (cmd->cmd_type) {
     case CMD_EMPTY:
       printf("<empty>");
-      break;
-
-    case CMD_PIPE:
-    case CMD_SEMICOLON:
-      struct cmd_pair *pair = (struct cmd_pair *)(cmd->detail);
-      printf("(");
-      print_cmd_aux(pair->cmd1);
-      printf(") %c (", cmd->type == CMD_PIPE ? '|' : ';');
-      print_cmd_aux(pair->cmd2);
-      printf(")");
       break;
 
     case CMD_IF_ELSE:
@@ -72,6 +62,11 @@ void print_cmd_aux(struct cmd *cmd) {
       if (simple->out) print_redir(1, simple->out, simple->out_type);
       if (simple->err) print_redir(2, simple->err, simple->err_type);
       break;
+  }
+
+  if (cmd->next) {
+    printf(" %c ", cmd->next_type == NEXT_PIPE ? '|' : ';');
+    print_cmd_aux(cmd->next);
   }
   return;
 }
