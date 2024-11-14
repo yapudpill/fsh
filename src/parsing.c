@@ -4,8 +4,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <stdio.h>
-
 #include <cmd_types.h>
 
 /* PARSING FUNCTIONS:
@@ -30,7 +28,9 @@ int parse_cmd(struct cmd *out);
 // Parses a simple command with eventual redirections
 int parse_simple(struct cmd *out);
 
+// Parses a for loop
 int parse_for(struct cmd *out);
+
 int parse_if_else(struct cmd *out);
 
 char *token;
@@ -43,7 +43,7 @@ struct cmd *parse(char *line) {
   // load the line in strtok
   token = strtok(line, " ");
 
-  if (parse_cmd(root) == -1) {
+  if (parse_cmd(root) == -1 || token) {
     free_cmd(root);
     return NULL;
   }
@@ -102,6 +102,28 @@ int is_simple_end(char *token) {
   );
 }
 
+char **make_argv(int argc, char *first_token) {
+  /* We assume that first_token points to a series of argc null-separated
+   * strings. We build a null-terminated array of pointers to each of these
+   * strings. */
+
+  char **argv = malloc((argc + 1) * sizeof(char *));
+  if (argv == NULL) return NULL;
+
+  argv[0] = first_token;
+  argv[argc] = NULL;
+
+  int i = 1;
+  for (char *p = first_token; i < argc; p++) {
+    if (*p == '\0') {
+      argv[i] = p+1;
+      i++;
+    }
+  }
+
+  return argv;
+}
+
 int parse_simple(struct cmd *out) {
   if (!token) return -1;
 
@@ -111,32 +133,21 @@ int parse_simple(struct cmd *out) {
   out->detail = detail;
 
   char *first_token = token;
-  detail->argc = 0;
   while (token && !is_redir(token) && !is_simple_end(token)) {
     detail->argc++;
     token = strtok(NULL, " ");
   }
 
-  char **argv = malloc((detail->argc + 1) * sizeof(char *));
-  if (argv == NULL) return -1;
-  detail->argv = argv;
-  argv[0] = first_token;
-  argv[detail->argc] = NULL;
-
-  int i = 1;
-  for (char *p = first_token; i < detail->argc; p++) {
-    if (*p == '\0') {
-      argv[i] = p+1;
-      i++;
-    }
-  }
+  detail->argv = make_argv(detail->argc, first_token);
+  if (!(detail->argv)) return -1;
 
   while (token && !is_simple_end(token)) {
     if (strcmp(token, "<") == 0) {
       detail->in = strtok(NULL, " ");
+      if (!(detail->in)) return -1;
     } else {
       char **name;
-      enum redir_type* type;
+      enum redir_type *type;
       if (token[0] == '2') {
         name = &(detail->err);
         type = &(detail->err_type);
@@ -147,6 +158,7 @@ int parse_simple(struct cmd *out) {
       }
 
       *name = strtok(NULL, " ");
+      if (!*name) return -1;
 
       if (strcmp(token, ">") == 0) {
         *type = REDIR_NORMAL;
@@ -160,11 +172,12 @@ int parse_simple(struct cmd *out) {
     }
     token = strtok(NULL, " ");
   }
+
   return 0;
 }
 
 int parse_for(struct cmd *out) {
-  struct cmd_for *detail = malloc(sizeof(struct cmd_for));
+  struct cmd_for *detail = calloc(1, sizeof(struct cmd_for));
   if (!detail) return -1;
   out->cmd_type = CMD_FOR;
   out->detail = detail;
@@ -180,31 +193,19 @@ int parse_for(struct cmd *out) {
 
   token = strtok(NULL, " ");
   char *first_option = token;
+  detail->argc = 0;
   while (token && strcmp(token, "{")) {
     detail->argc++;
     token = strtok(NULL, " ");
   }
+  if (!token) return -1; // loop must stop because of the second condition
 
-  char **argv = malloc((detail->argc + 1) * sizeof(char *));
-  if (argv == NULL) return -1;
-  detail->argv = argv;
-  argv[0] = first_option;
-  argv[detail->argc] = NULL;
-
-  int i = 1;
-  for (char *p = first_option; i < detail->argc; p++) {
-    if (*p == '\0') {
-      argv[i] = p+1;
-      i++;
-    }
-  }
-
-  if (!token || strcmp(token, "{")) return -1;
+  detail->argv = make_argv(detail->argc, first_option);
+  if (!(detail->argv)) return -1;
 
   token = strtok(NULL, " ");
   detail->body = calloc(1, sizeof(struct cmd));
   if (parse_cmd(detail->body) == -1) return -1;
-
 
   if (!token || strcmp(token, "}")) return -1;
 
