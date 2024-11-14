@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <stdio.h>
+
 #include <cmd_types.h>
 
 /* PARSING FUNCTIONS:
@@ -66,8 +68,7 @@ int parse_cmd(struct cmd *root) {
       token = strtok(NULL, " ");
 
     } else if (strcmp(token, "for") == 0) {
-      // if (root->cmd_type != CMD_EMPTY || parse_for(root) == -1) return -1;
-      return -1;
+      if (root->cmd_type != CMD_EMPTY || parse_for(root) == -1) return -1;
 
     } else if (strcmp(token, "if") == 0) {
       // if (root->cmd_type != CMD_EMPTY || parse_if_else(root) == -1) return -1;
@@ -159,6 +160,55 @@ int parse_simple(struct cmd *out) {
     }
     token = strtok(NULL, " ");
   }
+  return 0;
+}
+
+int parse_for(struct cmd *out) {
+  struct cmd_for *detail = malloc(sizeof(struct cmd_for));
+  if (!detail) return -1;
+  out->cmd_type = CMD_FOR;
+  out->detail = detail;
+
+  detail->var_name = strtok(NULL, " ");
+  if (!(detail->var_name)) return -1;
+
+  token = strtok(NULL, " ");
+  if (!token || strcmp(token, "in")) return -1;
+
+  detail->dir_name = strtok(NULL, " ");
+  if (!(detail->dir_name)) return -1;
+
+  token = strtok(NULL, " ");
+  char *first_option = token;
+  while (token && strcmp(token, "{")) {
+    detail->argc++;
+    token = strtok(NULL, " ");
+  }
+
+  char **argv = malloc((detail->argc + 1) * sizeof(char *));
+  if (argv == NULL) return -1;
+  detail->argv = argv;
+  argv[0] = first_option;
+  argv[detail->argc] = NULL;
+
+  int i = 1;
+  for (char *p = first_option; i < detail->argc; p++) {
+    if (*p == '\0') {
+      argv[i] = p+1;
+      i++;
+    }
+  }
+
+  if (!token || strcmp(token, "{")) return -1;
+
+  token = strtok(NULL, " ");
+  detail->body = calloc(1, sizeof(struct cmd));
+  if (parse_cmd(detail->body) == -1) return -1;
+
+
+  if (!token || strcmp(token, "}")) return -1;
+
+  token = strtok(NULL, " ");
   return 0;
 }
 
