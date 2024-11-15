@@ -184,7 +184,7 @@ int parse_simple(struct cmd *out) {
         *type = REDIR_OVERWRITE;
       } else {
         write(2, "parsing: unknown redirection symbol\n", 37);
-        return -1; // Unknown redirection symbol
+        return -1;
       }
 
       *name = strtok(NULL, " ");
