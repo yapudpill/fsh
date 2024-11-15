@@ -9,6 +9,7 @@ enum cmd_type {
 };
 
 enum redir_type {
+  REDIR_NONE, // MUST be number 0
   REDIR_NORMAL,
   REDIR_APPEND,
   REDIR_OVERWRITE
@@ -22,19 +23,19 @@ enum next_type {
 
 struct cmd {
   enum cmd_type cmd_type;
-  void *detail;
+  void *detail; // only has meaning if cmd_type is not CMD_EMPTY
   enum next_type next_type;
-  struct cmd *next;
+  struct cmd *next; // only has meaning if next_type is not NEXT_NONE
 };
 
 struct cmd_simple {
   int argc;
   char **argv;
   char *in;
-  char *out;
   enum redir_type out_type;
-  char *err;
+  char *out; // only has meaning if out_type is not REDIR_NONE
   enum redir_type err_type;
+  char *err; // only has meaning if err_type is not REDIR_NONE
 };
 
 struct cmd_if_else {
@@ -45,7 +46,6 @@ struct cmd_if_else {
 
 struct cmd_for {
   char *var_name;
-  char *dir_name;
   int argc;
   char **argv;
   struct cmd *body;

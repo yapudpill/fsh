@@ -74,7 +74,7 @@ int main(int argc, char* argv[]) {
   char *line;
 
   if(init_wd_vars() == EXIT_FAILURE ||
-   init_env_vars() == EXIT_FAILURE) return EXIT_FAILURE;
+    init_env_vars() == EXIT_FAILURE) return EXIT_FAILURE;
 
   while(1) {
     update_prompt();
@@ -82,15 +82,13 @@ int main(int argc, char* argv[]) {
     add_history(line);
 
     struct cmd *cmd = parse(line);
-    if (!cmd) {
-      printf("invalid command\n");
-      continue;
+    if (cmd) {
+      print_cmd(cmd);
+      free_cmd(cmd);
     }
 
-    print_cmd(cmd);
-
-    free_cmd(cmd);
     free(line);
+    return 0;
   }
 
   return EXIT_SUCCESS;

@@ -11,6 +11,8 @@ void print_redir(int device, char *name, enum redir_type type) {
     printf(" ");
     if (device == 2) printf("2");
     switch (type) {
+      case REDIR_NONE: // we check this before calling the function
+        break;
       case REDIR_NORMAL:
         printf("> %s", name);
         break;
@@ -47,7 +49,7 @@ void print_cmd_aux(struct cmd *cmd) {
 
     case CMD_FOR:
       struct cmd_for *cmd_for = (struct cmd_for *)(cmd->detail);
-      printf("for %s in %s ", cmd_for->var_name, cmd_for->dir_name);
+      printf("for %s in ", cmd_for->var_name);
       for (char **arg = cmd_for->argv; *arg; arg++) printf("%s ", *arg);
       printf("{ ");
       print_cmd_aux(cmd_for->body);
@@ -59,14 +61,22 @@ void print_cmd_aux(struct cmd *cmd) {
       printf("%s", simple->argv[0]);
       for (char **arg = simple->argv + 1; *arg; arg++) printf(" %s", *arg);
       if (simple->in) print_redir(0, simple->in, 0);
-      if (simple->out) print_redir(1, simple->out, simple->out_type);
-      if (simple->err) print_redir(2, simple->err, simple->err_type);
+      if (simple->out_type != REDIR_NONE) print_redir(1, simple->out, simple->out_type);
+      if (simple->err_type != REDIR_NONE) print_redir(2, simple->err, simple->err_type);
       break;
   }
 
-  if (cmd->next) {
-    printf(" %c ", cmd->next_type == NEXT_PIPE ? '|' : ';');
-    print_cmd_aux(cmd->next);
+  switch (cmd->next_type) {
+    case NEXT_NONE:
+      break;
+    case NEXT_PIPE:
+      printf(" | ");
+      print_cmd_aux(cmd->next);
+      break;
+    case NEXT_SEMICOLON:
+      printf(" | ");
+      print_cmd_aux(cmd->next);
+      break;
   }
   return;
 }

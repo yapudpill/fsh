@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include <cmd_types.h>
 
@@ -45,9 +46,13 @@ struct cmd *parse(char *line) {
   token = strtok(line, " ");
 
   if (parse_cmd(root) == -1 || token) {
+    // if parse_cmd failed or if there is still a token to parse, then the
+    // command was malformed
+    if (token) write(2, "parsing: malformed command\n", 28);
     free_cmd(root);
     return NULL;
   }
+
   return root;
 }
 
@@ -55,27 +60,35 @@ int parse_cmd(struct cmd *root) {
   while (token && strcmp(token, "{") && strcmp(token, "}")) {
 
     if (strcmp(token, "|") == 0 || strcmp(token, ";") == 0) {
-      // We add a new command to the chained list of commands
+      // if we see ; or |, we add a new command to the chained list of commands
       int pipe = (strcmp(token, "|") == 0);
 
       if ((pipe && root->cmd_type != CMD_SIMPLE) || root->cmd_type == CMD_EMPTY) return -1;
 
+      // create and fill new root
       struct cmd *new_root = calloc(1, sizeof(struct cmd));
       if (!new_root) return -1;
+
+      // link new root to the old one
       root->next_type = pipe ? NEXT_PIPE : NEXT_SEMICOLON;
       root->next = new_root;
-
       root = new_root;
+
       token = strtok(NULL, " ");
 
-    } else if (strcmp(token, "for") == 0) {
-      if (root->cmd_type != CMD_EMPTY || parse_for(root) == -1) return -1;
+    } else if (root->cmd_type != CMD_EMPTY) {
+        // everything except | and ; must be parsed on an empty root
+        write(2, "parsing: malformed command\n", 28);
+        return -1;
+
+    } else if(strcmp(token, "for") == 0) {
+      if (parse_for(root) == -1) return -1;
 
     } else if (strcmp(token, "if") == 0) {
-      if (root->cmd_type != CMD_EMPTY || parse_if_else(root) == -1) return -1;
+      if (parse_if_else(root) == -1) return -1;
 
     } else {
-      if (root->cmd_type != CMD_EMPTY || parse_simple(root) == -1) return -1;
+      if (parse_simple(root) == -1) return -1;
     }
   }
   return 0;
@@ -125,26 +138,32 @@ char **make_argv(int argc, char *first_token) {
 }
 
 int parse_simple(struct cmd *out) {
-  if (!token) return -1;
-
+  // create detail node and link it to the root
   struct cmd_simple *detail = calloc(1, sizeof(struct cmd_simple));
   if (!detail) return -1;
   out->cmd_type = CMD_SIMPLE;
   out->detail = detail;
 
+  // count argc and make argv
   char *first_token = token;
+  int argc = 0;
   while (token && !is_redir(token) && !is_simple_end(token)) {
-    detail->argc++;
+    argc++;
     token = strtok(NULL, " ");
   }
 
-  detail->argv = make_argv(detail->argc, first_token);
+  detail->argv = make_argv(argc, first_token);
   if (!(detail->argv)) return -1;
+  detail->argc = argc;
 
+  // parse redirections
   while (token && !is_simple_end(token)) {
     if (strcmp(token, "<") == 0) {
       detail->in = strtok(NULL, " ");
-      if (!(detail->in)) return -1;
+      if (!(detail->in)) {
+        write(2, "parsing: missing file name after <\n", 36);
+        return -1;
+      }
     } else {
       char **name;
       enum redir_type *type;
@@ -157,9 +176,6 @@ int parse_simple(struct cmd *out) {
         type = &(detail->out_type);
       }
 
-      *name = strtok(NULL, " ");
-      if (!*name) return -1;
-
       if (strcmp(token, ">") == 0) {
         *type = REDIR_NORMAL;
       } else if (strcmp(token, ">>") == 0) {
@@ -167,83 +183,120 @@ int parse_simple(struct cmd *out) {
       } else if (strcmp(token, ">|") == 0) {
         *type = REDIR_OVERWRITE;
       } else {
+        write(2, "parsing: unknown redirection symbol\n", 37);
         return -1; // Unknown redirection symbol
       }
+
+      *name = strtok(NULL, " ");
+      if (!*name) {
+        write(2, "parsing: missing file name after redirection\n", 46);
+        return -1;
+      }
     }
+
     token = strtok(NULL, " ");
   }
 
   return 0;
 }
 
+// Parses a body surrounded by braces
+struct cmd *parse_body() {
+  // check that we have "{" before the body
+  if (!token || strcmp(token, "{")) {
+    write(2, "parsing: missing { before body\n", 32);
+    return NULL;
+  }
+  token = strtok(NULL, " ");
+
+  // alloc and parse the body
+  struct cmd *body = calloc(1, sizeof(struct cmd));
+  if (!body) return NULL;
+  if (parse_cmd(body) == -1) {
+    free(body);
+    return NULL;
+  }
+
+  // check that we have "}" at the end of the body
+  if (!token || strcmp(token, "}")) {
+    write(2, "parsing: missing } after body\n", 31);
+    free(body);
+    return NULL;
+  }
+  token = strtok(NULL, " ");
+
+  return body;
+}
+
 int parse_for(struct cmd *out) {
+  // create detail node and link it to the root
   struct cmd_for *detail = calloc(1, sizeof(struct cmd_for));
   if (!detail) return -1;
   out->cmd_type = CMD_FOR;
   out->detail = detail;
 
+  // get variable name
   detail->var_name = strtok(NULL, " ");
-  if (!(detail->var_name)) return -1;
-
+  if (!(detail->var_name)) {
+    write(2, "parsing: missing for variable name\n", 36);
+    return -1;
+  }
   token = strtok(NULL, " ");
-  if (!token || strcmp(token, "in")) return -1;
 
-  detail->dir_name = strtok(NULL, " ");
-  if (!(detail->dir_name)) return -1;
-
+  // check that we have "in" after the variable
+  if (!token || strcmp(token, "in")) {
+    write(2, "parsing: missing \"in\" in for construct\n", 40);
+    return -1;
+  }
   token = strtok(NULL, " ");
-  char *first_option = token;
-  detail->argc = 0;
+
+  // parse directory name and options, and make argv
+  char *dir_name = token;
+  if (!dir_name) {
+    write(2, "parsing: missing for directory name\n", 37);
+    return -1;
+  }
+  int argc = 0;
   while (token && strcmp(token, "{")) {
-    detail->argc++;
+    argc++;
     token = strtok(NULL, " ");
   }
-  if (!token) return -1; // loop must stop because of the second condition
 
-  detail->argv = make_argv(detail->argc, first_option);
+  detail->argv = make_argv(argc, dir_name);
   if (!(detail->argv)) return -1;
+  detail->argc = argc;
 
-  token = strtok(NULL, " ");
-  detail->body = calloc(1, sizeof(struct cmd));
-  if (!(detail->body) || !token || parse_cmd(detail->body) == -1) return -1;
+  // parse the body
+  detail->body = parse_body();
+  if (!(detail->body)) return -1;
 
-  if (!token || strcmp(token, "}")) return -1;
-
-  token = strtok(NULL, " ");
   return 0;
 }
 
 int parse_if_else(struct cmd *out) {
+  // create detail node and link it to the root
   struct cmd_if_else *detail = calloc(1, sizeof(struct cmd_if_else));
   if (!detail) return -1;
   out->cmd_type = CMD_IF_ELSE;
   out->detail = detail;
 
+  // parse and fill the test command
   token = strtok(NULL, " ");
   detail->cmd_test = calloc(1, sizeof(struct cmd));
   if (!(detail->cmd_test) || parse_cmd(detail->cmd_test) == -1) return -1;
 
-  if (!token || strcmp(token, "{")) return -1;
+  // parse the first body
+  detail->cmd_then = parse_body();
+  if (!(detail->cmd_then)) return -1;
 
+  // check if there is an else branch, if no return normally
+  if (!token || strcmp(token, "else")) return 0;
   token = strtok(NULL, " ");
-  detail->cmd_then = calloc(1, sizeof(struct cmd));
-  if (!(detail->cmd_then) || !token || parse_cmd(detail->cmd_then) == -1) return -1;
 
-  if (!token || strcmp(token, "}")) return -1;
+  // parse the else body
+  detail->cmd_else = parse_body();
+  if (!(detail->cmd_else)) return -1;
 
-  token = strtok(NULL, " ");
-  if (!token || strcmp(token, "else")) return 0; // if no else branch, end normally
-
-  token = strtok(NULL, " ");
-  if (!token || strcmp(token, "{")) return -1;
-
-  token = strtok(NULL, " ");
-  detail->cmd_else = calloc(1, sizeof(struct cmd));
-  if (!(detail->cmd_else) || !token || parse_cmd(detail->cmd_else) == -1) return -1;
-
-  if (!token || strcmp(token, "}")) return -1;
-
-  token = strtok(NULL, " ");
   return 0;
 }
 
@@ -274,7 +327,7 @@ void free_cmd(struct cmd *cmd) {
       break;
   }
 
-  if (cmd->next) free_cmd(cmd->next);
+  if (cmd->next_type != NEXT_NONE) free_cmd(cmd->next);
   free(cmd);
   return;
 }
