@@ -31,6 +31,7 @@ int parse_simple(struct cmd *out);
 // Parses a for loop
 int parse_for(struct cmd *out);
 
+// Parses an if-else construct
 int parse_if_else(struct cmd *out);
 
 char *token;
@@ -71,8 +72,7 @@ int parse_cmd(struct cmd *root) {
       if (root->cmd_type != CMD_EMPTY || parse_for(root) == -1) return -1;
 
     } else if (strcmp(token, "if") == 0) {
-      // if (root->cmd_type != CMD_EMPTY || parse_if_else(root) == -1) return -1;
-      return -1;
+      if (root->cmd_type != CMD_EMPTY || parse_if_else(root) == -1) return -1;
 
     } else {
       if (root->cmd_type != CMD_EMPTY || parse_simple(root) == -1) return -1;
@@ -108,7 +108,7 @@ char **make_argv(int argc, char *first_token) {
    * strings. */
 
   char **argv = malloc((argc + 1) * sizeof(char *));
-  if (argv == NULL) return NULL;
+  if (!argv) return NULL;
 
   argv[0] = first_token;
   argv[argc] = NULL;
@@ -205,7 +205,41 @@ int parse_for(struct cmd *out) {
 
   token = strtok(NULL, " ");
   detail->body = calloc(1, sizeof(struct cmd));
-  if (parse_cmd(detail->body) == -1) return -1;
+  if (!(detail->body) || !token || parse_cmd(detail->body) == -1) return -1;
+
+  if (!token || strcmp(token, "}")) return -1;
+
+  token = strtok(NULL, " ");
+  return 0;
+}
+
+int parse_if_else(struct cmd *out) {
+  struct cmd_if_else *detail = calloc(1, sizeof(struct cmd_if_else));
+  if (!detail) return -1;
+  out->cmd_type = CMD_IF_ELSE;
+  out->detail = detail;
+
+  token = strtok(NULL, " ");
+  detail->cmd_test = calloc(1, sizeof(struct cmd));
+  if (!(detail->cmd_test) || parse_cmd(detail->cmd_test) == -1) return -1;
+
+  if (!token || strcmp(token, "{")) return -1;
+
+  token = strtok(NULL, " ");
+  detail->cmd_then = calloc(1, sizeof(struct cmd));
+  if (!(detail->cmd_then) || !token || parse_cmd(detail->cmd_then) == -1) return -1;
+
+  if (!token || strcmp(token, "}")) return -1;
+
+  token = strtok(NULL, " ");
+  if (!token || strcmp(token, "else")) return 0; // if no else branch, end normally
+
+  token = strtok(NULL, " ");
+  if (!token || strcmp(token, "{")) return -1;
+
+  token = strtok(NULL, " ");
+  detail->cmd_else = calloc(1, sizeof(struct cmd));
+  if (!(detail->cmd_else) || !token || parse_cmd(detail->cmd_else) == -1) return -1;
 
   if (!token || strcmp(token, "}")) return -1;
 

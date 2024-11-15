@@ -39,8 +39,8 @@ void print_cmd_aux(struct cmd *cmd) {
       print_cmd_aux(if_else->cmd_then);
       printf(" }");
       if (if_else->cmd_else) {
-        printf(" else {");
-        print_cmd_aux(if_else->cmd_then);
+        printf(" else { ");
+        print_cmd_aux(if_else->cmd_else);
         printf(" }");
       }
       break;
