@@ -74,7 +74,7 @@ void print_cmd_aux(struct cmd *cmd) {
       print_cmd_aux(cmd->next);
       break;
     case NEXT_SEMICOLON:
-      printf(" | ");
+      printf(" ; ");
       print_cmd_aux(cmd->next);
       break;
   }

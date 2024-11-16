@@ -252,14 +252,14 @@ int parse_for(struct cmd *out) {
 
   // parse directory name and options, and make argv
   char *dir_name = token;
-  if (!dir_name) {
-    write(2, "parsing: missing for directory name\n", 37);
-    return -1;
-  }
   int argc = 0;
   while (token && strcmp(token, "{")) {
     argc++;
     token = strtok(NULL, " ");
+  }
+  if (argc == 0) {
+    write(2, "parsing: missing for directory name\n", 37);
+    return -1;
   }
 
   detail->argv = make_argv(argc, dir_name);
