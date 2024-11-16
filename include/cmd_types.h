@@ -46,8 +46,12 @@ struct cmd_if_else {
 
 struct cmd_for {
   char *var_name;
-  int argc;
-  char **argv;
+  char *dir_name;
+  int list_all;
+  int recursive;
+  char *filter_ext;
+  char filter_type;
+  int parallel;
   struct cmd *body;
 };
 

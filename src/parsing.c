@@ -1,6 +1,7 @@
 #include <parsing.h>
 
 #include <stddef.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -228,6 +229,18 @@ struct cmd *parse_body() {
   return body;
 }
 
+int is_ftype(char c) {
+  return (
+    c == 'f' ||
+    c == 'd' ||
+    c == 'l' ||
+    c == 'p'
+  );
+}
+
+#include <stdio.h>
+
+
 int parse_for(struct cmd *out) {
   // create detail node and link it to the root
   struct cmd_for *detail = calloc(1, sizeof(struct cmd_for));
@@ -238,33 +251,84 @@ int parse_for(struct cmd *out) {
   // get variable name
   detail->var_name = strtok(NULL, " ");
   if (!(detail->var_name)) {
-    write(2, "parsing: missing for variable name\n", 36);
+    write(2, "parsing: missing variable name in for loop\n", 44);
     return -1;
   }
   token = strtok(NULL, " ");
 
   // check that we have "in" after the variable
   if (!token || strcmp(token, "in")) {
-    write(2, "parsing: missing \"in\" in for construct\n", 40);
+    write(2, "parsing: missing \"in\" in for loop\n", 35);
+    return -1;
+  }
+
+  // get directory name
+  detail->dir_name = strtok(NULL, " ");
+  if (!(detail->dir_name)) {
+    write(2, "parsing: missing directory name in for loop\n", 45);
     return -1;
   }
   token = strtok(NULL, " ");
 
-  // parse directory name and options, and make argv
-  char *dir_name = token;
-  int argc = 0;
+  // parse options
   while (token && strcmp(token, "{")) {
-    argc++;
+    if (strcmp(token, "-A") == 0) {
+      if (detail->list_all) {
+        write(2, "parsing: duplicate for loop option -A\n", 39);
+        return -1;
+      }
+      detail->list_all = 1;
+
+    } else if (strcmp(token, "-r") == 0) {
+      if (detail->recursive) {
+        write(2, "parsing: duplicate for loop option -r\n", 39);
+        return -1;
+      }
+      detail->recursive = 1;
+
+    } else if (strcmp(token, "-e") == 0) {
+      if (detail->filter_ext) {
+        write(2, "parsing: duplicate for loop option -e\n", 39);
+        return -1;
+      }
+      detail->filter_ext = strtok(NULL, " ");
+      if (!(detail->filter_ext)) {
+        write(2, "parsing: missing argument for loop option -e\n", 46);
+        return -1;
+      }
+
+    } else if (strcmp(token, "-t") == 0) {
+      if (detail->filter_type) {
+        write(2, "parsing: duplicate for loop option -t\n", 39);
+        return -1;
+      }
+      token = strtok(NULL, " ");
+      if (!token || strlen(token) != 1 || !is_ftype(token[0])) {
+        write(2, "parsing: missing or invalid argument for loop option -t\n", 57);
+        return -1;
+      }
+      detail->filter_type = token[0];
+
+    } else if (strcmp(token, "-p") == 0) {
+      if (detail->parallel) {
+        write(2, "parsing: duplicate for loop option -p\n", 39);
+        return -1;
+      }
+      token = strtok(NULL, " ");
+      if (!token || sscanf(token, "%d", &(detail->parallel)) != 1) {
+        write(2, "parsing: missing or invalid argument for loop option -p\n", 57);
+        return -1;
+      }
+
+    } else {
+      int size = 32 + strlen(token);
+      char msg[size];
+      sprintf(msg, "parsing: unknown loop option %s\n", token);
+      write(2, msg, size);
+    }
+
     token = strtok(NULL, " ");
   }
-  if (argc == 0) {
-    write(2, "parsing: missing for directory name\n", 37);
-    return -1;
-  }
-
-  detail->argv = make_argv(argc, dir_name);
-  if (!(detail->argv)) return -1;
-  detail->argc = argc;
 
   // parse the body
   detail->body = parse_body();
@@ -321,7 +385,6 @@ void free_cmd(struct cmd *cmd) {
 
     case CMD_FOR:
       struct cmd_for *cmd_for = (struct cmd_for *)(cmd->detail);
-      if (cmd_for->argv != NULL) free(cmd_for->argv);
       if (cmd_for->body != NULL) free_cmd(cmd_for->body);
       free(cmd_for);
       break;

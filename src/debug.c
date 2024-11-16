@@ -49,8 +49,12 @@ void print_cmd_aux(struct cmd *cmd) {
 
     case CMD_FOR:
       struct cmd_for *cmd_for = (struct cmd_for *)(cmd->detail);
-      printf("for %s in ", cmd_for->var_name);
-      for (char **arg = cmd_for->argv; *arg; arg++) printf("%s ", *arg);
+      printf("for %s in %s ", cmd_for->var_name, cmd_for->dir_name);
+      if (cmd_for->list_all) printf("-A ");
+      if (cmd_for->recursive) printf("-r ");
+      if (cmd_for->filter_ext) printf("-e %s ", cmd_for->filter_ext);
+      if (cmd_for->filter_type) printf("-t %c ", cmd_for->filter_type);
+      if (cmd_for->parallel) printf("-p %d ", cmd_for->parallel);
       printf("{ ");
       print_cmd_aux(cmd_for->body);
       printf(" }");
