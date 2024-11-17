@@ -49,10 +49,11 @@ Voici le contenu des 3 types de détail possibles :
   `cmd_else`, pointant respectivement vers le test du if...else, la branche
   "true" et la branche "false".
 - **`cmd_for`** :
-  - Un champ `var_name` contenant le nom de la variable de boucle
-  - Deux champs `argc` et `argv` contenant le nom du dossier et les options de
-    la boucle. Le nom du dossier étant le premier élément de `argv`, on peut
-    utiliser `getopt` pour le parser.
+  - Deux champ `var_name` et `dir_name` contenant le nom de la variable de
+    boucle et du répertoire sur lequel on itère.
+  - Cinq champs représentant chacune des options possibles : `list_all` (`-A`),
+    `recursive` (`-r`), `filter_ext` (`-e`), `filter_type` (`-t`) et
+    `parallel` (`-p`).
   - Un pointeur de commande `body` pointant vers le corps de la boucle.
 
 ## Stratégie de parsing

@@ -130,7 +130,7 @@ int parse_simple(struct cmd *out) {
     token = strtok(NULL, " ");
   }
 
-  detail->argv =  malloc((argc + 1) * sizeof(char *));
+  detail->argv = malloc((argc + 1) * sizeof(char *));
   if (!(detail->argv)) return -1;
   detail->argc = argc;
 
@@ -227,13 +227,13 @@ int is_ftype(char c) {
 }
 
 int check_duplicate(struct cmd_for *detail, char *option) {
-  void *ptr;
+  long ptr;
   if (strcmp(token, "-A") == 0) {
     ptr = detail->list_all;
   } else if (strcmp(token, "-r") == 0) {
     ptr = detail->recursive;
   } else if (strcmp(token, "-e") == 0) {
-    ptr = detail->filter_ext;
+    ptr = (long)(detail->filter_ext);
   } else if (strcmp(token, "-t") == 0) {
     ptr = detail->filter_type;
   } else if (strcmp(token, "-p") == 0) {
