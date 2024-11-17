@@ -49,7 +49,6 @@ struct cmd *parse(char *line) {
   if (parse_cmd(root) == -1 || token) {
     // if parse_cmd failed or if there is still a token to parse, then the
     // command was malformed
-    if (token) write(2, "parsing: malformed command\n", 28);
     free_cmd(root);
     return NULL;
   }
@@ -97,45 +96,23 @@ int parse_cmd(struct cmd *root) {
 
 int is_redir(char *token) {
   return (
-    strcmp(token, "<") == 0
-    || strcmp(token, ">") == 0
-    || strcmp(token, ">>") == 0
-    || strcmp(token, ">|") == 0
-    || strcmp(token, "2>") == 0
-    || strcmp(token, "2>>") == 0
-    || strcmp(token, "2>|") == 0
+    strcmp(token, "<") == 0 ||
+    strcmp(token, ">") == 0 ||
+    strcmp(token, ">>") == 0 ||
+    strcmp(token, ">|") == 0 ||
+    strcmp(token, "2>") == 0 ||
+    strcmp(token, "2>>") == 0 ||
+    strcmp(token, "2>|") == 0
   );
 }
 
 int is_simple_end(char *token) {
   return (
-    strcmp(token, ";") == 0
-    || strcmp(token, "|") == 0
-    || strcmp(token, "{") == 0
-    || strcmp(token, "}") == 0
+    strcmp(token, ";") == 0 ||
+    strcmp(token, "|") == 0 ||
+    strcmp(token, "{") == 0 ||
+    strcmp(token, "}") == 0
   );
-}
-
-char **make_argv(int argc, char *first_token) {
-  /* We assume that first_token points to a series of argc null-separated
-   * strings. We build a null-terminated array of pointers to each of these
-   * strings. */
-
-  char **argv = malloc((argc + 1) * sizeof(char *));
-  if (!argv) return NULL;
-
-  argv[0] = first_token;
-  argv[argc] = NULL;
-
-  int i = 1;
-  for (char *p = first_token; i < argc; p++) {
-    if (*p == '\0') {
-      argv[i] = p+1;
-      i++;
-    }
-  }
-
-  return argv;
 }
 
 int parse_simple(struct cmd *out) {
@@ -153,9 +130,20 @@ int parse_simple(struct cmd *out) {
     token = strtok(NULL, " ");
   }
 
-  detail->argv = make_argv(argc, first_token);
+  detail->argv =  malloc((argc + 1) * sizeof(char *));
   if (!(detail->argv)) return -1;
   detail->argc = argc;
+
+  detail->argv[0] = first_token;
+  detail->argv[argc] = NULL;
+
+  int i = 1;
+  for (char *p = first_token; i < argc; p++) {
+    if (*p == '\0') {
+      detail->argv[i] = p+1;
+      i++;
+    }
+  }
 
   // parse redirections
   while (token && !is_simple_end(token)) {
@@ -238,8 +226,34 @@ int is_ftype(char c) {
   );
 }
 
-#include <stdio.h>
+int check_duplicate(struct cmd_for *detail, char *option) {
+  void *ptr;
+  if (strcmp(token, "-A") == 0) {
+    ptr = detail->list_all;
+  } else if (strcmp(token, "-r") == 0) {
+    ptr = detail->recursive;
+  } else if (strcmp(token, "-e") == 0) {
+    ptr = detail->filter_ext;
+  } else if (strcmp(token, "-t") == 0) {
+    ptr = detail->filter_type;
+  } else if (strcmp(token, "-p") == 0) {
+    ptr = detail->parallel;
+  } else {
+    int size = 32 + strlen(option);
+    char msg[size];
+    sprintf(msg, "parsing: unknown loop option %s\n", option);
+    write(2, msg, size);
+    return -1;
+  }
 
+  if (ptr) {
+    char msg[39]; // option is 2 bytes long
+    sprintf(msg, "parsing: duplicate for loop option %s\n", option);
+    write(2, msg, 39);
+    return -1;
+  }
+  return 0;
+}
 
 int parse_for(struct cmd *out) {
   // create detail node and link it to the root
@@ -272,61 +286,31 @@ int parse_for(struct cmd *out) {
 
   // parse options
   while (token && strcmp(token, "{")) {
+    if (check_duplicate(detail, token) == -1) return -1;
     if (strcmp(token, "-A") == 0) {
-      if (detail->list_all) {
-        write(2, "parsing: duplicate for loop option -A\n", 39);
-        return -1;
-      }
       detail->list_all = 1;
-
     } else if (strcmp(token, "-r") == 0) {
-      if (detail->recursive) {
-        write(2, "parsing: duplicate for loop option -r\n", 39);
-        return -1;
-      }
       detail->recursive = 1;
-
     } else if (strcmp(token, "-e") == 0) {
-      if (detail->filter_ext) {
-        write(2, "parsing: duplicate for loop option -e\n", 39);
-        return -1;
-      }
       detail->filter_ext = strtok(NULL, " ");
       if (!(detail->filter_ext)) {
-        write(2, "parsing: missing argument for loop option -e\n", 46);
+        write(2, "parsing: missing or invalid argument for loop option -e\n", 57);
         return -1;
       }
-
     } else if (strcmp(token, "-t") == 0) {
-      if (detail->filter_type) {
-        write(2, "parsing: duplicate for loop option -t\n", 39);
-        return -1;
-      }
       token = strtok(NULL, " ");
       if (!token || strlen(token) != 1 || !is_ftype(token[0])) {
         write(2, "parsing: missing or invalid argument for loop option -t\n", 57);
         return -1;
       }
       detail->filter_type = token[0];
-
     } else if (strcmp(token, "-p") == 0) {
-      if (detail->parallel) {
-        write(2, "parsing: duplicate for loop option -p\n", 39);
-        return -1;
-      }
       token = strtok(NULL, " ");
       if (!token || sscanf(token, "%d", &(detail->parallel)) != 1) {
         write(2, "parsing: missing or invalid argument for loop option -p\n", 57);
         return -1;
       }
-
-    } else {
-      int size = 32 + strlen(token);
-      char msg[size];
-      sprintf(msg, "parsing: unknown loop option %s\n", token);
-      write(2, msg, size);
     }
-
     token = strtok(NULL, " ");
   }
 
