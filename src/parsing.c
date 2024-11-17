@@ -242,12 +242,12 @@ int check_duplicate(struct cmd_for *detail, char *option) {
     int size = 32 + strlen(option);
     char msg[size];
     sprintf(msg, "parsing: unknown loop option %s\n", option);
-    write(2, msg, size);
+    write(2, msg, size - 1);
     return -1;
   }
 
   if (ptr) {
-    char msg[39]; // option is 2 bytes long
+    char msg[40]; // option is 2 bytes long
     sprintf(msg, "parsing: duplicate for loop option %s\n", option);
     write(2, msg, 39);
     return -1;
