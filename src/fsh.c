@@ -1,10 +1,14 @@
 #include <fsh.h>
-#include <commands.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <readline/readline.h>
 #include <readline/history.h>
+
+#include <cmd_types.h>
+#include <parsing.h>
+#include <debug.h>
 
 // global variables' declaration
 char PREV_WORKING_DIR[PATH_MAX];
@@ -70,13 +74,19 @@ int main(int argc, char* argv[]) {
   char *line;
 
   if(init_wd_vars() == EXIT_FAILURE ||
-   init_env_vars() == EXIT_FAILURE) return EXIT_FAILURE;
+    init_env_vars() == EXIT_FAILURE) return EXIT_FAILURE;
 
   while(1) {
     update_prompt();
-    line = readline(prompt);
+    line = readline(prompt); // TODO: if line is NULL we should exit
     add_history(line);
-    PREV_RETURN_VALUE = parse_and_exec_simple_cmd(line);
+
+    struct cmd *cmd = parse(line);
+    if (cmd) {
+      print_cmd(cmd);
+      free_cmd(cmd);
+    }
+
     free(line);
   }
 

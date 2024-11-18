@@ -6,11 +6,14 @@ objects := $(patsubst src/%.c,build/%.o,$(wildcard src/*.c))
 
 all: fsh
 
+.PHONY: clean
 clean:
-	rm -rf *.o build/*.o fsh
+	rm -rf build fsh
 
-build/%.o: src/%.c
-	mkdir -p build
+build:
+	mkdir build
+
+build/%.o: src/%.c build
 	$(CC) $(CFLAGS) -c $< -o $@
 
 fsh: $(objects)
