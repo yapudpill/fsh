@@ -1,6 +1,9 @@
 CC=gcc
 CFLAGS=-Wall -Iinclude
-# TODO : Add a debug mode
+
+ifeq ($(DEBUG), 1)
+	CFLAGS += -g -DDEBUG=1
+endif
 
 objects := $(patsubst src/%.c,build/%.o,$(wildcard src/*.c))
 
@@ -18,3 +21,6 @@ build/%.o: src/%.c build
 
 fsh: $(objects)
 	$(CC) $(CFLAGS) -o fsh $^ -lreadline
+
+debug:
+	$(MAKE) DEBUG=1
