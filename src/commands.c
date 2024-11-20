@@ -84,7 +84,7 @@ int cmd_ftype(int argc, char **argv, int fd_in, int fd_out, int fd_err) {
 }
 
 // Exits fsh, using the code passed in argument or the previous command return code
-int cmd_exit(int argc, char **argv) {
+int cmd_exit(int argc, char **argv, int fd_in, int fd_out, int fd_err) {
   int val;
   if (argc <= 1)
     val = PREV_RETURN_VALUE;
