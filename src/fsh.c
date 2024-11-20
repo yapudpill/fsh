@@ -7,8 +7,9 @@
 #include <readline/history.h>
 
 #include <cmd_types.h>
+#include <execution.h>
 #include <parsing.h>
-#include <debug.h>
+
 
 // global variables' declaration
 char PREV_WORKING_DIR[PATH_MAX];
@@ -19,6 +20,7 @@ char CWD[PATH_MAX];
 char prompt[52];
 
 
+// Updates the prompt (without printing it) according to the current state
 void update_prompt(void) {
   char *head = prompt;
 
@@ -67,6 +69,16 @@ int init_wd_vars() {
   return EXIT_SUCCESS;
 }
 
+// Executes a single command line
+int run_line(char *line) {
+  struct cmd *cmd = parse(line);
+  if (cmd != NULL) {
+    // print_cmd(cmd);
+    PREV_RETURN_VALUE = exec_cmd_chain(cmd, STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO);
+    free_cmd(cmd);
+  }
+  return PREV_RETURN_VALUE;
+}
 
 int main(int argc, char* argv[]) {
   rl_outstream = stderr;
@@ -78,17 +90,16 @@ int main(int argc, char* argv[]) {
 
   while(1) {
     update_prompt();
-    line = readline(prompt); // TODO: if line is NULL we should exit
-    add_history(line);
+    line = readline(prompt);
+    if (line == NULL) {
+      exit(PREV_RETURN_VALUE);
+    }
 
-    struct cmd *cmd = parse(line);
-    if (cmd) {
-      print_cmd(cmd);
-      free_cmd(cmd);
+    if (*line != '\0') {
+      add_history(line);
+      run_line(line);
     }
 
     free(line);
   }
-
-  return EXIT_SUCCESS;
 }
