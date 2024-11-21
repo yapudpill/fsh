@@ -14,16 +14,16 @@
 // the redirection.
 // Uses fd_err to know where to log errors.
 int setup_out_redir(char *file_name, enum redir_type type, int fd_err) {
-    int oflags = O_WRONLY;
+    int oflags = O_WRONLY | O_CREAT;
     switch (type) {
       case REDIR_NORMAL:
-        oflags |= O_CREAT | O_EXCL;
+        oflags |= O_EXCL;
         break;
       case REDIR_APPEND:
         oflags |= O_APPEND;
         break;
       case REDIR_OVERWRITE:
-        oflags |= O_CREAT | O_TRUNC;
+        oflags |= O_TRUNC;
         break;
       case REDIR_NONE:
         // This should happen only if setup_out_dir was called without checking if a command has a
