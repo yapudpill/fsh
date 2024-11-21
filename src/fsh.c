@@ -8,7 +8,9 @@
 
 #include <cmd_types.h>
 #include <parsing.h>
+#ifdef DEBUG
 #include <debug.h>
+#endif
 
 // global variables' declaration
 char PREV_WORKING_DIR[PATH_MAX];
@@ -83,7 +85,9 @@ int main(int argc, char* argv[]) {
 
     struct cmd *cmd = parse(line);
     if (cmd) {
+#ifdef DEBUG
       print_cmd(cmd);
+#endif
       free_cmd(cmd);
     }
 

@@ -2,7 +2,7 @@ CC=gcc
 CFLAGS=-Wall -Iinclude
 
 ifeq ($(DEBUG), 1)
-	CFLAGS += -g -DDEBUG=1
+	CFLAGS += -g -DDEBUG
 endif
 
 objects := $(patsubst src/%.c,build/%.o,$(wildcard src/*.c))
