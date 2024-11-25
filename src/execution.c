@@ -51,38 +51,31 @@ int setup_in_redir(char *name, int fd_err) {
   return fd;
 }
 
+// Create a new string if necessary where anything of the form `$(character)` is replaced with
+// var[character]. Returns NULL if the string passed is NULL or on error. Returns the same pointer
+// if no possible substitutions are found.
 char *inject_dependencies(char *dependent_str, char **vars) {
   if (dependent_str == NULL) return NULL;
 
   int size = strlen(dependent_str), changed = 0;
   char *cur = dependent_str, *res, *tmp;
-
   for(;(cur = strchr(cur, '$')); cur++) {
-    // printf("cur :  %s \n",  cur);
     tmp = vars[(int) cur[1]];
     if(tmp == NULL) continue; // if the var is unset
     if(!changed) changed = 1;
     size += strlen(tmp) - 2; // remove two chars representing $F, add the length of the actual value of the var
   }
-
   if(!changed) return dependent_str;
 
-  // printf("size : %d \n", size);
   res = calloc(size+1, sizeof(char));
-
   if(res == NULL) return NULL;
-
-  // printf("malloc : %s \n", res);
 
   cur = dependent_str;
   int i, j;
-
   for(i = 0, j = 0; cur[i] ;) {
-    // printf("res[j] : %c , cur[i] : %c, i : %d , j : %d \n", res[j], cur[i], i, j);
     if(cur[i] != '$' || (vars[(int) cur[i+1]] == NULL)) res[j] = cur[i], i++, j++;
     else {
       tmp = vars[(int) cur[i+1]];
-      // printf("var : %s \n", tmp);
       size = strlen(tmp);
       strncpy(res+j, tmp, size);
       i+=2, j+=size;
@@ -94,6 +87,7 @@ char *inject_dependencies(char *dependent_str, char **vars) {
   return res;
 }
 
+// Create a new argv where every variable is replaced by its value. Returns NULL on error.
 char **inject_arg_dependencies(int argc, char **argv, char **vars) {
   char **res_argv = malloc((argc + 1) * sizeof(char *));
 
@@ -144,7 +138,7 @@ int exec_for_cmd(struct cmd_for *cmd_for, int fd_in, int fd_out, int fd_err, cha
 
   vars[(int) cmd_for->var_name] = original_var_value; // reestablish the old
 
-  if(dir_name != cmd_for->dir_name && dir_name != NULL) free(dir_name);
+  if(dir_name != cmd_for->dir_name && dir_name != NULL) free(dir_name); // Make sure we don't free the original.
 
   return ret;
 }
