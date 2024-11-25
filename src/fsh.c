@@ -17,7 +17,7 @@ char *HOME;
 int PREV_RETURN_VALUE;
 char CWD[PATH_MAX];
 
-char prompt[52];
+char prompt[52], **vars;
 
 
 // Updates the prompt (without printing it) according to the current state
@@ -74,7 +74,7 @@ int run_line(char *line) {
   struct cmd *cmd = parse(line);
   if (cmd != NULL) {
     // print_cmd(cmd);
-    PREV_RETURN_VALUE = exec_cmd_chain(cmd, STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO);
+    PREV_RETURN_VALUE = exec_cmd_chain(cmd, STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO, vars);
     free_cmd(cmd);
   }
   return PREV_RETURN_VALUE;
@@ -87,6 +87,8 @@ int main(int argc, char* argv[]) {
 
   if(init_wd_vars() == EXIT_FAILURE ||
     init_env_vars() == EXIT_FAILURE) return EXIT_FAILURE;
+
+  vars = calloc(128, sizeof(char *));
 
   while(1) {
     update_prompt();
