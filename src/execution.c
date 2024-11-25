@@ -5,6 +5,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <sys/wait.h>
+#include <dirent.h>
 
 #include "execution.h"
 #include "utils.h"
@@ -52,40 +53,100 @@ int setup_in_redir(char *name, int fd_err) {
 
 char *inject_dependencies(char *dependent_str, char **vars) {
   if (dependent_str == NULL) return NULL;
-  // figure out the size of the new string and if there are no dependencies return the same pointer
+
   int size = strlen(dependent_str), changed = 0;
   char *cur = dependent_str, *res, *tmp;
+
   for(;(cur = strchr(cur, '$')); cur++) {
+    // printf("cur :  %s \n",  cur);
     tmp = vars[(int) cur[1]];
-    if(tmp == NULL) continue;
+    if(tmp == NULL) continue; // if the var is unset
     if(!changed) changed = 1;
-    size += strlen(tmp) - 2;
+    size += strlen(tmp) - 2; // remove two chars representing $F, add the length of the actual value of the var
   }
+
   if(!changed) return dependent_str;
-  // allocate memory for the string
+
+  // printf("size : %d \n", size);
   res = calloc(size+1, sizeof(char));
+
   if(res == NULL) return NULL;
-  // build the string
+
+  // printf("malloc : %s \n", res);
+
   cur = dependent_str;
   int i, j;
+
   for(i = 0, j = 0; cur[i] ;) {
+    // printf("res[j] : %c , cur[i] : %c, i : %d , j : %d \n", res[j], cur[i], i, j);
     if(cur[i] != '$' || (vars[(int) cur[i+1]] == NULL)) res[j] = cur[i], i++, j++;
     else {
       tmp = vars[(int) cur[i+1]];
+      // printf("var : %s \n", tmp);
       size = strlen(tmp);
       strncpy(res+j, tmp, size);
       i+=2, j+=size;
     }
   }
+
   res[j] = '\0';
 
   return res;
 }
 
+char **inject_arg_dependencies(int argc, char **argv, char **vars) {
+  char **res_argv = malloc((argc + 1) * sizeof(char *));
+
+  if (res_argv == NULL) return NULL;
+
+  for (int i = 0 ; i < argc ; i++) {
+    res_argv[i] = inject_dependencies(argv[i], vars);
+    if (res_argv[i] == NULL) return NULL;
+  }
+
+  res_argv[argc] = NULL;
+
+  return res_argv;
+}
+
+char *form_path(char *parent, char *child) {
+  int size = strlen(parent) + strlen(child) + 2;
+  char *res = malloc(size);
+  snprintf(res, size, "%s/%s", parent, child);
+  return res;
+}
+
 
 int exec_for_cmd(struct cmd_for *cmd_for, int fd_in, int fd_out, int fd_err, char **vars) {
-  // TODO
-  return 1;
+  char *dir_name = inject_dependencies(cmd_for->dir_name, vars), *original_var_value;
+
+  if (dir_name == NULL) return EXIT_FAILURE; // means allocation error
+
+  int ret = EXIT_SUCCESS, tmp;
+  DIR *dirp;
+  struct dirent *dentry;
+
+  dirp = opendir(dir_name);
+
+  if (dirp == NULL) {
+    perror("opendir");
+    return EXIT_FAILURE;
+  }
+
+  original_var_value = vars[(int) cmd_for->var_name]; // save the original value to avoid nested for loops overwriting the original
+
+  while ((dentry = readdir(dirp))) {
+    if(strcmp(dentry->d_name, ".") == 0 || strcmp(dentry->d_name, "..") == 0) continue;
+    vars[(int) cmd_for->var_name] = form_path(dir_name, dentry->d_name);
+    tmp = exec_cmd_chain(cmd_for->body, fd_in, fd_out, fd_err, vars);
+    ret = (tmp > ret) ? tmp : ret; // take the max of all the return values
+  }
+
+  vars[(int) cmd_for->var_name] = original_var_value; // reestablish the old
+
+  if(dir_name != cmd_for->dir_name && dir_name != NULL) free(dir_name);
+
+  return ret;
 }
 
 // Executes a simple command, i.e. either one external command or one internal command, opening files for redirections
@@ -95,6 +156,19 @@ int exec_simple_cmd(struct cmd_simple *cmd_simple, int fd_in, int fd_out, int fd
   char **injected_argv = NULL, *injected_in = NULL, *injected_out = NULL, *injected_err = NULL;
 
   injected_argv = inject_arg_dependencies(cmd_simple->argc, cmd_simple->argv, vars);
+
+
+  if(injected_argv == NULL) return EXIT_FAILURE; // nothing to free
+
+  if(cmd_simple->in || cmd_simple->out || cmd_simple->err) { // there is at least one redirection
+    injected_in = inject_dependencies(cmd_simple->in, vars);
+    injected_out = inject_dependencies(cmd_simple->out, vars);
+    injected_err = inject_dependencies(cmd_simple->err, vars);
+    if(injected_in == NULL && injected_out == NULL && injected_err == NULL) { // at least one of these is because of an allocation error
+      ret = EXIT_FAILURE;
+      goto cleanup_injections;
+    }
+  }
 
   // Setup redirections if necessary
   if (cmd_simple->in != NULL) fd_in = setup_in_redir(injected_in, fd_err);
@@ -113,6 +187,15 @@ int exec_simple_cmd(struct cmd_simple *cmd_simple, int fd_in, int fd_out, int fd
   if (cmd_simple->in != NULL) close(fd_in);
   if (cmd_simple->out != NULL) close(fd_out);
   if (cmd_simple->err != NULL) close(fd_err);
+
+  cleanup_injections:
+  if (injected_argv != NULL) {
+    for(int i = 0;i < cmd_simple->argc; i++) if(cmd_simple->argv[i] != injected_argv[i]) free(injected_argv[i]);
+    free(injected_argv);
+  }
+  if (cmd_simple->in != injected_in && injected_in != NULL) free(injected_in);
+  if (cmd_simple->out != injected_out && injected_out != NULL) free(injected_out);
+  if (cmd_simple->err != injected_err && injected_err != NULL) free(injected_err);
 
   return ret;
 }
