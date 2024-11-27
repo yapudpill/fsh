@@ -263,9 +263,12 @@ int parse_for(struct cmd *out) {
   out->detail = detail;
 
   // get variable name
-  detail->var_name = strtok(NULL, " ")[0];
-  if (!(detail->var_name)) {
-    write(2, "parsing: missing variable name in for loop\n", 44);
+  token = strtok(NULL, " ");
+  if (!token) {
+    dprintf(2, "parsing: missing variable name in for loop\n");
+    return -1;
+  } else if (token[0] == '\0' || token[1] != '\0') {
+    dprintf(2, "parsing: variable name must be one character long\n");
     return -1;
   }
   token = strtok(NULL, " ");
