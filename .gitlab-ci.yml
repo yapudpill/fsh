@@ -1,0 +1,38 @@
+image: gcc:latest
+
+stages:
+  - build
+  - test
+
+variables:
+  CC: gcc
+  CFLAGS: -g
+  AUTOTESTS_URL: "https://moule.informatique.univ-paris-diderot.fr/geoffroy/sy5-2024-2025-projet-fsh-autotests/-/raw/main/autotests.sh"
+  AUTOTESTS_SHA512: "954e13bb2d8865054bd113881f5f8b469316144f0771722ed1e191eaebc4ec250ec3b44a99608a77a49d84ac70c20d3c2311b6a02d4e5e97251c5e0837eadad2"
+
+before_script:
+  - apt-get update && apt-get install -y libreadline-dev
+  - mkdir -p build
+
+build:
+  stage: build
+  script:
+    - make
+  artifacts:
+    paths:
+      - fsh
+    expire_in: 1 hour
+
+test:
+  stage: test
+  script:
+    - echo "Downloading autotests script..."
+    - curl -o autotests.sh "$AUTOTESTS_URL"
+    - echo "Verifying SHA-512 checksum..."
+    - echo "$AUTOTESTS_SHA512  autotests.sh" | sha512sum -c -
+    - echo "Running autotests..."
+    - chmod +x autotests.sh
+    - ./autotests.sh
+
+  dependencies:
+    - build
