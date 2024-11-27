@@ -78,7 +78,7 @@ int parse_cmd(struct cmd *root) {
 
     } else if (root->cmd_type != CMD_EMPTY) {
         // everything except | and ; must be parsed on an empty root
-        write(2, "parsing: malformed command\n", 28);
+        dprintf(2, "parsing: malformed command\n");
         return -1;
 
     } else if(strcmp(token, "for") == 0) {
@@ -150,7 +150,7 @@ int parse_simple(struct cmd *out) {
     if (strcmp(token, "<") == 0) {
       detail->in = strtok(NULL, " ");
       if (!(detail->in)) {
-        write(2, "parsing: missing file name after <\n", 36);
+        dprintf(2, "parsing: missing file name after <\n");
         return -1;
       }
     } else {
@@ -172,13 +172,13 @@ int parse_simple(struct cmd *out) {
       } else if (strcmp(token, ">|") == 0) {
         *type = REDIR_OVERWRITE;
       } else {
-        write(2, "parsing: unknown redirection symbol\n", 37);
+        dprintf(2, "parsing: unknown redirection symbol\n");
         return -1;
       }
 
       *name = strtok(NULL, " ");
       if (!*name) {
-        write(2, "parsing: missing file name after redirection\n", 46);
+        dprintf(2, "parsing: missing file name after redirection\n");
         return -1;
       }
     }
@@ -193,7 +193,7 @@ int parse_simple(struct cmd *out) {
 struct cmd *parse_body() {
   // check that we have "{" before the body
   if (!token || strcmp(token, "{")) {
-    write(2, "parsing: missing { before body\n", 32);
+    dprintf(2, "parsing: missing { before body\n");
     return NULL;
   }
   token = strtok(NULL, " ");
@@ -208,7 +208,7 @@ struct cmd *parse_body() {
 
   // check that we have "}" at the end of the body
   if (!token || strcmp(token, "}")) {
-    write(2, "parsing: missing } after body\n", 31);
+    dprintf(2, "parsing: missing } after body\n");
     free(body);
     return NULL;
   }
@@ -239,17 +239,12 @@ int check_duplicate(struct cmd_for *detail, char *option) {
   } else if (strcmp(token, "-p") == 0) {
     ptr = detail->parallel;
   } else {
-    int size = 32 + strlen(option);
-    char msg[size];
-    sprintf(msg, "parsing: unknown loop option %s\n", option);
-    write(2, msg, size - 1);
+    dprintf(2, "parsing: unknown loop option %s\n", option);
     return -1;
   }
 
   if (ptr) {
-    char msg[40]; // option is 2 bytes long
-    sprintf(msg, "parsing: duplicate for loop option %s\n", option);
-    write(2, msg, 39);
+    dprintf(2, "parsing: duplicate for loop option %s\n", option);
     return -1;
   }
   return 0;
@@ -263,23 +258,27 @@ int parse_for(struct cmd *out) {
   out->detail = detail;
 
   // get variable name
-  detail->var_name = strtok(NULL, " ");
-  if (!(detail->var_name)) {
-    write(2, "parsing: missing variable name in for loop\n", 44);
+  token = strtok(NULL, " ");
+  if (!token) {
+    dprintf(2, "parsing: missing variable name in for loop\n");
+    return -1;
+  } else if (token[0] == '\0' || token[1] != '\0') {
+    dprintf(2, "parsing: variable name must be one character long\n");
     return -1;
   }
+  detail->var_name = token[0];
   token = strtok(NULL, " ");
 
   // check that we have "in" after the variable
   if (!token || strcmp(token, "in")) {
-    write(2, "parsing: missing \"in\" in for loop\n", 35);
+    dprintf(2, "parsing: missing \"in\" in for loop\n");
     return -1;
   }
 
   // get directory name
   detail->dir_name = strtok(NULL, " ");
   if (!(detail->dir_name)) {
-    write(2, "parsing: missing directory name in for loop\n", 45);
+    dprintf(2, "parsing: missing directory name in for loop\n");
     return -1;
   }
   token = strtok(NULL, " ");
@@ -294,20 +293,20 @@ int parse_for(struct cmd *out) {
     } else if (strcmp(token, "-e") == 0) {
       detail->filter_ext = strtok(NULL, " ");
       if (!(detail->filter_ext)) {
-        write(2, "parsing: missing or invalid argument for loop option -e\n", 57);
+        dprintf(2, "parsing: missing or invalid argument for loop option -e\n");
         return -1;
       }
     } else if (strcmp(token, "-t") == 0) {
       token = strtok(NULL, " ");
       if (!token || strlen(token) != 1 || !is_ftype(token[0])) {
-        write(2, "parsing: missing or invalid argument for loop option -t\n", 57);
+        dprintf(2, "parsing: missing or invalid argument for loop option -t\n");
         return -1;
       }
       detail->filter_type = token[0];
     } else if (strcmp(token, "-p") == 0) {
       token = strtok(NULL, " ");
       if (!token || sscanf(token, "%d", &(detail->parallel)) != 1) {
-        write(2, "parsing: missing or invalid argument for loop option -p\n", 57);
+        dprintf(2, "parsing: missing or invalid argument for loop option -p\n");
         return -1;
       }
     }

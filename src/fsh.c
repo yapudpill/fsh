@@ -7,20 +7,22 @@
 #include <readline/history.h>
 
 #include <cmd_types.h>
+#include <execution.h>
 #include <parsing.h>
 #ifdef DEBUG
 #include <debug.h>
 #endif
 
 // global variables' declaration
-char PREV_WORKING_DIR[PATH_MAX];
-char *HOME;
+char *CWD, *PREV_WORKING_DIR, *HOME;
 int PREV_RETURN_VALUE;
-char CWD[PATH_MAX];
 
 char prompt[52];
 
+char *vars[128];
 
+
+// Updates the prompt (without printing it) according to the current state
 void update_prompt(void) {
   char *head = prompt;
 
@@ -61,38 +63,49 @@ int init_env_vars() {
 }
 
 int init_wd_vars() {
-  if (getcwd(CWD, PATH_MAX) == NULL) {
+  PREV_WORKING_DIR = NULL;
+
+  CWD = getcwd(NULL, 0);
+  if (!CWD) {
     return EXIT_FAILURE;
   }
 
-  strcpy(PREV_WORKING_DIR, CWD);
   return EXIT_SUCCESS;
 }
-
 
 int main(int argc, char* argv[]) {
   rl_outstream = stderr;
 
   char *line;
+  struct cmd *cmd;
 
   if(init_wd_vars() == EXIT_FAILURE ||
     init_env_vars() == EXIT_FAILURE) return EXIT_FAILURE;
 
   while(1) {
     update_prompt();
-    line = readline(prompt); // TODO: if line is NULL we should exit
-    add_history(line);
+    line = readline(prompt);
+    if (line == NULL) {
+      break;
+    }
 
-    struct cmd *cmd = parse(line);
-    if (cmd) {
+    if (*line != '\0') {
+      add_history(line);
+
+      cmd = parse(line);
+      if (cmd != NULL) {
 #ifdef DEBUG
-      print_cmd(cmd);
+        print_cmd(cmd);
 #endif
-      free_cmd(cmd);
+        PREV_RETURN_VALUE = exec_cmd_chain(cmd, vars);
+        free_cmd(cmd);
+      }
     }
 
     free(line);
   }
 
-  return EXIT_SUCCESS;
+  if (PREV_WORKING_DIR) free(PREV_WORKING_DIR);
+  free(CWD);
+  return PREV_RETURN_VALUE;
 }

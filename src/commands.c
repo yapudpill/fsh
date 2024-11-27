@@ -1,160 +1,258 @@
 #include <commands.h>
-#include <fsh.h>
-#include <unistd.h>
+
+#include <errno.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/stat.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <unistd.h>
 
+#include <fsh.h>
 
-int cmd_pwd(int _argc, char **_argv) {
-  // Considering that the variable CWD is always updated using `getcwd` at every cwd change, it should be safe to assume
-  // it already contains the right path, so there is no need for another `getcwd`
-  printf("%s\n", CWD);
+typedef int (*cmd_func)(int argc, char **argv);
+
+int cmd_pwd(int argc, char **argv) {
+  // Considering that the variable CWD is always updated using `getcwd` at
+  // every cwd change, it should be safe to assume it already contains the right
+  // path, so there is no need for another `getcwd`
+  if (argc > 1) {
+    dprintf(2, "pwd: too many arguments");
+    return EXIT_FAILURE;
+  }
+  dprintf(1, "%s\n", CWD);
   return EXIT_SUCCESS;
 }
 
 int cmd_cd(int argc, char **argv) {
-  int ret = 0;
-
-  if(argc == 1) {
-    if (HOME == NULL) {
-      fprintf(stderr, "fsh: cd: HOME not set\n");
-      return EXIT_FAILURE;
-    }
-    ret = chdir(HOME);
-  }
-  else if(strcmp(argv[1], "-") == 0) ret = chdir(PREV_WORKING_DIR);
-  else ret = chdir(argv[1]);
-
-  if(ret == -1) {
-    perror("chdir");
+  if (argc > 2) {
+    dprintf(2, "cd: too many arguments");
     return EXIT_FAILURE;
   }
 
-  strcpy(PREV_WORKING_DIR, CWD);
-  if (getcwd(CWD, PATH_MAX) == NULL) {
-    // If we ever meet this condition, it means something very wrong has happened, or the directory has been altered at
-    // the wrong moment.
+  // change directory
+  int ret;
+  if(argc == 1) {
+    if (HOME == NULL) {
+      dprintf(2, "cd: HOME not set\n");
+      return EXIT_FAILURE;
+    }
+    ret = chdir(HOME);
+  } else if(strcmp(argv[1], "-") == 0) {
+    if (PREV_WORKING_DIR == NULL) {
+      dprintf(2, "cd: no previous working directory\n");
+      return EXIT_FAILURE;
+    }
+    ret = chdir(PREV_WORKING_DIR);
+  } else {
+    ret = chdir(argv[1]);
+  }
 
-    // FIXME: decide what to do in this situation. Maybe try to revert to the previous directory, and if that fails too, give up and exit the shell.
-    perror("getcwd");
+  if(ret == -1) {
+    perror("cd");
+    return EXIT_FAILURE;
+  }
+
+  // update variables
+  if (PREV_WORKING_DIR) free(PREV_WORKING_DIR);
+  PREV_WORKING_DIR = CWD;
+
+  CWD = getcwd(NULL, 0);
+  if (CWD == NULL) {
+    // If we ever meet this condition, it means something very wrong has
+    // happened, or the directory has been altered at the wrong moment.
+
+    // FIXME: decide what to do in this situation. Maybe try to revert to the
+    // previous directory, and if that fails too, give up and exit the shell.
+    perror("cd: getcwd");
     exit(EXIT_FAILURE);
   }
 
   return EXIT_SUCCESS;
 }
 
+// Prints the type of the file passed in argument
 int cmd_ftype(int argc, char **argv) {
-  if(argc < 2) return EXIT_FAILURE;
-  struct stat sb;
-  if(stat(argv[1], &sb) == -1) {
-    perror("ftype-stat");
+  if(argc != 2) {
+    dprintf(2, "ftype: this command takes exactly one argument");
     return EXIT_FAILURE;
   }
 
-  switch(sb.st_mode & __S_IFMT) {
-    case __S_IFREG:
-      printf("regular file\n");
+  struct stat sb;
+  if (lstat(argv[1], &sb) == -1) {
+    perror("ftype");
+    return EXIT_FAILURE;
+  }
+
+  switch(sb.st_mode & S_IFMT) {
+    case S_IFREG:
+      dprintf(1, "regular file\n");
       break;
-    case __S_IFDIR:
-      printf("directory\n");
+    case S_IFDIR:
+      dprintf(1, "directory\n");
       break;
-    case __S_IFLNK:
-      printf("symbolic link\n");
+    case S_IFLNK:
+      dprintf(1, "symbolic link\n");
       break;
-    case __S_IFIFO:
-      printf("named pipe\n");
+    case S_IFIFO:
+      dprintf(1, "named pipe\n");
       break;
     default:
-      printf("other\n");
+      dprintf(1, "other\n");
   }
 
   return EXIT_SUCCESS;
 }
 
+// Exits fsh, using the code passed in argument or the previous command return code
 int cmd_exit(int argc, char **argv) {
-  int val;
-  if (argc <= 1)
-    val = PREV_RETURN_VALUE;
-  else if (sscanf(argv[1], "%d", &val) == 0)
+  if (argc > 2) {
+    dprintf(2, "exit: too many arguments");
     return EXIT_FAILURE;
+  }
+
+  int val;
+  if (argc == 1) {
+    val = PREV_RETURN_VALUE;
+  } else if (sscanf(argv[1], "%d", &val) != 1) {
+    dprintf(2, "exit: invalid argument");
+    return EXIT_FAILURE;
+  }
+
+  if (PREV_WORKING_DIR) free(PREV_WORKING_DIR);
+  free(CWD);
+
   exit(val);
 }
 
-int exec_external_cmd(int _argc, char **argv) {
-  int wstat;
-  char *cmd = argv[0];
-  switch (fork()) {
+// Debug command, useful to debug I/O. For every char it receives in stdin,
+// slowly repeat it twice on stdout and add a new line
+int cmd_autotune(int argc, char **argv) {
+  size_t ret;
+  char c;
+  while ((ret = read(1, &c, 1)) != 0) {
+    if (ret == -1) {
+      if (errno == EINTR) continue;
+      perror("autotune: read");
+      return EXIT_FAILURE;
+    }
+    if (c == '\n') continue;
+    write(1, &c, 1);
+    usleep(200000);
+    write(1, &c, 1);
+    usleep(200000);
+    write(1, "\n", 1);
+  }
+  return EXIT_SUCCESS;
+}
+
+// Debug command, simply returns the code passed in argument, or 1 by default
+int cmd_oopsie(int argc, char **argv) {
+  if (argc > 2) {
+    dprintf(2, "oopsie: too many arguments");
+    return EXIT_FAILURE;
+  }
+
+  int val;
+  if (argc == 1) {
+    val = EXIT_FAILURE;
+  } else {
+    errno = 0;
+    val = (int) strtol(argv[1], NULL, 10);
+    if (errno) {
+      perror("oopsie");
+      return EXIT_FAILURE;
+    }
+  }
+  return val;
+}
+
+// Executes an external command, using execvp
+int call_external_cmd(int argc, char **argv, int redir[3]) {
+  int pid, i;
+  switch ((pid = fork())) {
     case -1:
       perror("fork");
       return EXIT_FAILURE;
     case 0:
-      execvp(cmd, argv);
-      perror("execvp");
-      // We are in the child process, so we have to immediately exit if something goes wrong, otherwise there will be
-      // an additional child `fsh` process every time we enter a non-existent command
+      for (i = 0; i < 3; i++) {
+        if (redir[i] != -2) {
+          if (dup2(redir[i], i) == -1) {
+            perror("dup2");
+            exit(EXIT_FAILURE);
+          }
+          close(redir[i]);
+        }
+      }
+      execvp(argv[0], argv);
+      // We are in the child process, so we have to immediately exit if
+      // something goes wrong, otherwise there will be an additional child `fsh`
+      // process every time we enter a non-existent command
+      dprintf(2, "fsh: unknown command %s\n", argv[0]);
       exit(EXIT_FAILURE);
     default:
-      if (wait(&wstat) == -1) {
-        perror("wait");
+      int wstat;
+      if (waitpid(pid, &wstat, 0) == -1) {
+        perror("waitpid");
         return EXIT_FAILURE;
       }
       if (WIFEXITED(wstat)) {
         return WEXITSTATUS(wstat);
       }
       if (WIFSIGNALED(wstat)) {
-        int sig = WTERMSIG(wstat);
-        printf("Process terminated by signal %d\n", sig);
+        // We want fsh to exit with exit code 255 if we exit right after a
+        // process dies because of a signal. However, we would still like to
+        // differentiate inside fsh if the previous process died because of a
+        // signal or if it simply returned 255. So we use return code -1 to
+        // indicate a death by signal. Because exit codes are encoded on 8 bits,
+        // it will automatically be converted to 255 when exiting !
         return -1;
       }
       return EXIT_FAILURE;
   }
 }
 
-int exec_cmd(int argc, char **argv) {
-  cmd_func cmd_function;
+// Runs a command (internal or external) and wait for it to finish
+int call_command_and_wait(int argc, char **argv, int redir[3]) {
   char *cmd = argv[0];
+
+  cmd_func internal_function;
   if (strcmp(cmd, "ftype") == 0) {
-    cmd_function = &cmd_ftype;
+    internal_function = cmd_ftype;
   } else if (strcmp(cmd, "exit") == 0) {
-    cmd_function = &cmd_exit;
+    internal_function = cmd_exit;
   } else if (strcmp(cmd, "cd") == 0) {
-    cmd_function = &cmd_cd;
+    internal_function = cmd_cd;
   } else if (strcmp(cmd, "pwd") == 0) {
-    cmd_function = &cmd_pwd;
-  } else cmd_function = exec_external_cmd;
-
-  int res = cmd_function(argc, argv);
-
-  return res;
-}
-
-int parse_and_exec_simple_cmd(char *input) { // TODO: use the syntax tree once we implement it instead of doing the parsing here
-  if (input == NULL) cmd_exit(1, NULL);
-  int argc = 1;
-  char *first_token;
-  first_token = strtok(input, " \n");
-  if (first_token == NULL) {
-    return EXIT_SUCCESS;
+    internal_function = cmd_pwd;
+  } else if (strcmp(cmd, "autotune") == 0) {
+    internal_function = cmd_autotune;
+  } else if (strcmp(cmd, "oopsie") == 0) {
+    internal_function = cmd_oopsie;
+  } else {
+    internal_function = NULL;
   }
-  while (strtok(NULL, " \n") != NULL) {
-    argc++;
-  }
-  char **argv = malloc((argc + 1) * sizeof(char*));
-  argv[0] = first_token;
-  argv[argc] = NULL; // per the POSIX spec: The argv arrays are each terminated by a null pointer. The null pointer terminating the argv array is not counted in argc
-  int i=1;
-  for (char *p = input; i < argc; p++) {
-    if (*p == '\0') {
-      argv[i] = p + 1;
-      i++;
+
+  int ret;
+  if (internal_function) {
+    int i, saves[3];
+    for (i = 0; i < 3; i++) {
+      if (redir[i] != -2) {
+        saves[i] = dup(i);
+        dup2(redir[i], i);
+      }
     }
+    ret = internal_function(argc, argv);
+    for (i = 0; i < 3; i++) {
+      if (redir[i] != -2) {
+        dup2(saves[i], i);
+        close(saves[i]);
+      }
+    }
+  } else {
+    ret = call_external_cmd(argc, argv, redir);
   }
-
-  int res = exec_cmd(argc, argv);
-  free(argv);
-  return res;
+  return ret;
 }
