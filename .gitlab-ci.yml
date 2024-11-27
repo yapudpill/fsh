@@ -9,12 +9,12 @@ variables:
   AUTOTEST_DIR: ".sy5-2024-2025-projet-fsh-autotests.nosync"
 
 before_script:
-  - apt-get update && apt-get install -y libreadline-dev valgrind
-  - mkdir -p build
+  - apt-get update
 
 build:
   stage: build
   script:
+    - apt-get install -y libreadline-dev
     - make
   artifacts:
     paths:
@@ -24,6 +24,7 @@ build:
 test:
   stage: test
   script:
+    - apt-get install -y valgrind
     - echo "Cloning autotests repo..."
     - >-
       if [ ! -d "$AUTOTEST_DIR" ]; then
