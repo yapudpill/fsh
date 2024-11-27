@@ -266,6 +266,7 @@ int parse_for(struct cmd *out) {
     dprintf(2, "parsing: variable name must be one character long\n");
     return -1;
   }
+  detail->var_name = token[0];
   token = strtok(NULL, " ");
 
   // check that we have "in" after the variable
