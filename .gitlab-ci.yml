@@ -8,6 +8,7 @@ variables:
   CC: gcc
   CFLAGS: -g
   AUTOTEST_GIT: "https://moule.informatique.univ-paris-diderot.fr/geoffroy/sy5-2024-2025-projet-fsh-autotests.git"
+  AUTOTEST_DIR: ".sy5-2024-2025-projet-fsh-autotests.nosync"
 
 before_script:
   - apt-get update && apt-get install -y libreadline-dev
