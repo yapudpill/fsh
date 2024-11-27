@@ -1,0 +1,36 @@
+image: gcc:latest
+
+stages:
+  - build
+  - test
+
+variables:
+  AUTOTEST_GIT: "https://moule.informatique.univ-paris-diderot.fr/geoffroy/sy5-2024-2025-projet-fsh-autotests.git"
+  AUTOTEST_DIR: ".sy5-2024-2025-projet-fsh-autotests.nosync"
+
+before_script:
+  - apt-get update
+
+build:
+  stage: build
+  script:
+    - apt-get install -y libreadline-dev
+    - make
+  artifacts:
+    paths:
+      - fsh
+    expire_in: 1 hour
+
+test:
+  stage: test
+  script:
+    - apt-get install -y valgrind
+    - echo "Cloning autotests repo..."
+    - >-
+      if [ ! -d "$AUTOTEST_DIR" ]; then
+        if ! git clone "$AUTOTEST_GIT" "$AUTOTEST_DIR"; then
+          echo "Failed to clone test repo" >&2;
+        fi;
+      fi
+    - cd "$AUTOTEST_DIR"
+    - ./autotests.sh
