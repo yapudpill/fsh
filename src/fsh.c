@@ -9,7 +9,9 @@
 #include <cmd_types.h>
 #include <execution.h>
 #include <parsing.h>
-
+#ifdef DEBUG
+#include <debug.h>
+#endif
 
 // global variables' declaration
 char *CWD, *PREV_WORKING_DIR, *HOME;
@@ -92,6 +94,9 @@ int main(int argc, char* argv[]) {
 
       cmd = parse(line);
       if (cmd != NULL) {
+#ifdef DEBUG
+        print_cmd(cmd);
+#endif
         PREV_RETURN_VALUE = exec_cmd_chain(cmd, vars);
         free_cmd(cmd);
       }
