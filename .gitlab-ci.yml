@@ -11,7 +11,7 @@ variables:
   AUTOTEST_DIR: ".sy5-2024-2025-projet-fsh-autotests.nosync"
 
 before_script:
-  - apt-get update && apt-get install -y libreadline-dev
+  - apt-get update && apt-get install -y libreadline-dev valgrind
   - mkdir -p build
 
 build:
