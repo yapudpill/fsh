@@ -12,12 +12,12 @@
 
 
 // global variables' declaration
-char PREV_WORKING_DIR[PATH_MAX];
-char *HOME;
+char *CWD, *PREV_WORKING_DIR, *HOME;
 int PREV_RETURN_VALUE;
-char CWD[PATH_MAX];
 
-char prompt[52], **vars;
+char prompt[52];
+
+char *vars[128];
 
 
 // Updates the prompt (without printing it) according to the current state
@@ -61,47 +61,46 @@ int init_env_vars() {
 }
 
 int init_wd_vars() {
-  if (getcwd(CWD, PATH_MAX) == NULL) {
+  PREV_WORKING_DIR = NULL;
+
+  CWD = getcwd(NULL, 0);
+  if (!CWD) {
     return EXIT_FAILURE;
   }
 
-  strcpy(PREV_WORKING_DIR, CWD);
   return EXIT_SUCCESS;
-}
-
-// Executes a single command line
-int run_line(char *line) {
-  struct cmd *cmd = parse(line);
-  if (cmd != NULL) {
-    // print_cmd(cmd);
-    PREV_RETURN_VALUE = exec_cmd_chain(cmd, STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO, vars);
-    free_cmd(cmd);
-  }
-  return PREV_RETURN_VALUE;
 }
 
 int main(int argc, char* argv[]) {
   rl_outstream = stderr;
 
   char *line;
+  struct cmd *cmd;
 
   if(init_wd_vars() == EXIT_FAILURE ||
     init_env_vars() == EXIT_FAILURE) return EXIT_FAILURE;
-
-  vars = calloc(128, sizeof(char *));
 
   while(1) {
     update_prompt();
     line = readline(prompt);
     if (line == NULL) {
-      exit(PREV_RETURN_VALUE);
+      break;
     }
 
     if (*line != '\0') {
       add_history(line);
-      run_line(line);
+
+      cmd = parse(line);
+      if (cmd != NULL) {
+        PREV_RETURN_VALUE = exec_cmd_chain(cmd, vars);
+        free_cmd(cmd);
+      }
     }
 
     free(line);
   }
+
+  if (PREV_WORKING_DIR) free(PREV_WORKING_DIR);
+  free(CWD);
+  return PREV_RETURN_VALUE;
 }

@@ -49,7 +49,7 @@ void print_cmd_aux(struct cmd *cmd) {
 
     case CMD_FOR:
       struct cmd_for *cmd_for = (struct cmd_for *)(cmd->detail);
-      printf("for %s in %s ", cmd_for->var_name, cmd_for->dir_name);
+      printf("for %c in %s ", cmd_for->var_name, cmd_for->dir_name);
       if (cmd_for->list_all) printf("-A ");
       if (cmd_for->recursive) printf("-r ");
       if (cmd_for->filter_ext) printf("-e %s ", cmd_for->filter_ext);
