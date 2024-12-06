@@ -190,7 +190,7 @@ int call_external_cmd(int argc, char **argv, int redir[3]) {
       // We are in the child process, so we have to immediately exit if
       // something goes wrong, otherwise there will be an additional child `fsh`
       // process every time we enter a non-existent command
-      dprintf(2, "fsh: unknown command %s\n", argv[0]);
+      perror("redirect_exec");
       exit(EXIT_FAILURE);
     default:
       int wstat;
