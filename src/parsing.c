@@ -140,7 +140,8 @@ int parse_simple(struct cmd *out) {
   int i = 1;
   for (char *p = first_token; i < argc; p++) {
     if (*p == '\0') {
-      detail->argv[i] = p+1;
+      do { p++; } while (*p == ' ');
+      detail->argv[i] = p;
       i++;
     }
   }
