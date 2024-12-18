@@ -143,8 +143,22 @@ int exec_for_cmd(struct cmd_for *cmd_for, char **vars) {
     char var[var_size];
     snprintf(var, var_size, "%s/%s", dir_name, fname);
     vars[(int) (cmd_for->var_name)] = var;
+    
+    if (cmd_for->filter_ext) { // -e
+      char *ext;
+      for(ext = strchr(fname+1, '.') ; ext ; ext = strchr(ext+1, '.')){
+        if (strcmp(ext+1, cmd_for->filter_ext) == 0) {
+          *ext = '\0';
+          break;
+        }
+      }
+      if(!ext) continue;
+    }
 
     if (cmd_for->filter_type && !same_type(cmd_for->filter_type, dentry->d_type)) // -t
+      continue;
+
+    if (!cmd_for->list_all && dentry->d_name[0] == '.') // -A
       continue;
 
     free(fname);
