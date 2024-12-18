@@ -54,7 +54,7 @@ int setup_in_redir(char *name) {
 // Create a new string if necessary where anything of the form `$(character)` is
 // replaced with var[character]. Returns NULL if the string passed is NULL or on
 // error. Returns the same pointer if no possible substitutions are found.
-char *inject_dependencies(char *dependent_str, char **vars) {
+char *replace_variables(char *dependent_str, char **vars) {
   if (dependent_str == NULL) return NULL;
 
   int size = strlen(dependent_str), changed = 0;
@@ -92,12 +92,12 @@ char *inject_dependencies(char *dependent_str, char **vars) {
 
 // Create a new argv where every variable is replaced by its value.
 // Returns NULL on error.
-char **inject_arg_dependencies(int argc, char **argv, char **vars) {
+char **replace_arg_variables(int argc, char **argv, char **vars) {
   char **res_argv = malloc((argc + 1) * sizeof(char *));
   if (res_argv == NULL) return NULL;
 
   for (int i = 0 ; i < argc ; i++) {
-    res_argv[i] = inject_dependencies(argv[i], vars);
+    res_argv[i] = replace_variables(argv[i], vars);
     if (res_argv[i] == NULL) return NULL;
   }
 
@@ -117,7 +117,7 @@ int same_type(char filter_type, char file_type) {
 }
 
 int exec_for_cmd(struct cmd_for *cmd_for, char **vars) {
-  char *dir_name = inject_dependencies(cmd_for->dir_name, vars);
+  char *dir_name = replace_variables(cmd_for->dir_name, vars);
   if (dir_name == NULL) return EXIT_FAILURE; // means allocation error
   int dir_len = strlen(dir_name);
 
@@ -143,6 +143,7 @@ int exec_for_cmd(struct cmd_for *cmd_for, char **vars) {
     char var[var_size];
     snprintf(var, var_size, "%s/%s", dir_name, fname);
     vars[(int) (cmd_for->var_name)] = var;
+    free(fname);
 
     if (cmd_for->recursive) { // -r
       struct stat file;
@@ -160,7 +161,7 @@ int exec_for_cmd(struct cmd_for *cmd_for, char **vars) {
 
     if (cmd_for->filter_ext) { // -e
       char *ext, found = 0;
-      for(ext = strchr(fname+1, '.') ; ext ; ext = strchr(ext+1, '.')){
+      for (ext = strchr(var + dir_len + 2, '.') ; ext ; ext = strchr(ext+1, '.')){
         if (strcmp(ext+1, cmd_for->filter_ext) == 0) {
           *ext = '\0', found = 1;
           break;
@@ -175,7 +176,6 @@ int exec_for_cmd(struct cmd_for *cmd_for, char **vars) {
     if (!cmd_for->list_all && dentry->d_name[0] == '.') // -A
       continue;
 
-    free(fname);
     tmp = exec_cmd_chain(cmd_for->body, vars);
     ret = MAX(tmp, ret); // take the max of all the return values
   }
@@ -192,7 +192,7 @@ int exec_for_cmd(struct cmd_for *cmd_for, char **vars) {
 // Executes a simple command, i.e. either one external command or one internal
 // command, opening files for redirections if necessary.
 int exec_simple_cmd(struct cmd_simple *cmd_simple, char **vars) {
-  char **injected_argv = inject_arg_dependencies(cmd_simple->argc, cmd_simple->argv, vars);
+  char **injected_argv = replace_arg_variables(cmd_simple->argc, cmd_simple->argv, vars);
   if(injected_argv == NULL) return EXIT_FAILURE; // nothing to free
 
   int ret, i;
@@ -202,7 +202,7 @@ int exec_simple_cmd(struct cmd_simple *cmd_simple, char **vars) {
   char *injected_redir[3] = { "", "", "" };
   for (i = 0; i < 3; i++) {
     if (redir_name[i]) {
-      injected_redir[i] = inject_dependencies(redir_name[i], vars);
+      injected_redir[i] = replace_variables(redir_name[i], vars);
     }
     if (injected_redir[i] == NULL) {
       ret = EXIT_FAILURE;
