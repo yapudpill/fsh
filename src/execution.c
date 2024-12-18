@@ -130,20 +130,17 @@ int exec_for_cmd(struct cmd_for *cmd_for, char **vars) {
   // save the original value to avoid nested for loops overwriting the original
   char *original_var_value = vars[(int) cmd_for->var_name];
 
-  int ret = EXIT_SUCCESS, tmp, var_size;
+  int ret = EXIT_SUCCESS, tmp_ret, var_size;
   struct dirent *dentry;
   while ((dentry = readdir(dirp))) {
     if (strcmp(dentry->d_name, ".") == 0 || strcmp(dentry->d_name, "..") == 0)
       continue;
-
-    char *fname = strdup(dentry->d_name);
     // TODO: -p
 
-    var_size = dir_len + strlen(fname) + 2;
+    var_size = dir_len + strlen(dentry->d_name) + 2;
     char var[var_size];
-    snprintf(var, var_size, "%s/%s", dir_name, fname);
+    snprintf(var, var_size, "%s/%s", dir_name, dentry->d_name);
     vars[(int) (cmd_for->var_name)] = var;
-    free(fname);
 
     if (cmd_for->recursive) { // -r
       struct stat file;
@@ -153,8 +150,8 @@ int exec_for_cmd(struct cmd_for *cmd_for, char **vars) {
       } else if (S_ISDIR(file.st_mode)) {
         char *old_dir = cmd_for->dir_name;
         cmd_for->dir_name = var;
-        tmp = exec_for_cmd(cmd_for, vars);
-        ret = MAX(tmp, ret);
+        tmp_ret = exec_for_cmd(cmd_for, vars);
+        ret = MAX(tmp_ret, ret);
         cmd_for->dir_name = old_dir;
       }
     }
@@ -176,8 +173,8 @@ int exec_for_cmd(struct cmd_for *cmd_for, char **vars) {
     if (!cmd_for->list_all && dentry->d_name[0] == '.') // -A
       continue;
 
-    tmp = exec_cmd_chain(cmd_for->body, vars);
-    ret = MAX(tmp, ret); // take the max of all the return values
+    tmp_ret = exec_cmd_chain(cmd_for->body, vars);
+    ret = MAX(tmp_ret, ret); // take the max of all the return values
   }
 
   vars[(int) cmd_for->var_name] = original_var_value; // reestablish the old
