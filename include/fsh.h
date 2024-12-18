@@ -1,6 +1,7 @@
 #ifndef FSH_H
 #define FSH_H
 #include <linux/limits.h>
+#define MAX(x, y) (((x) > (y)) ? (x) : (y))
 
 extern char *CWD;
 extern char *PREV_WORKING_DIR;

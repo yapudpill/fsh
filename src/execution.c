@@ -116,7 +116,6 @@ int same_type(char filter_type, char file_type) {
   }
 }
 
-
 int exec_for_cmd(struct cmd_for *cmd_for, char **vars) {
   char *dir_name = inject_dependencies(cmd_for->dir_name, vars);
   if (dir_name == NULL) return EXIT_FAILURE; // means allocation error
@@ -134,18 +133,23 @@ int exec_for_cmd(struct cmd_for *cmd_for, char **vars) {
   int ret = EXIT_SUCCESS, tmp, var_size;
   struct dirent *dentry;
   while ((dentry = readdir(dirp))) {
-    if (strcmp(dentry->d_name, ".") == 0 || strcmp(dentry->d_name, "..") == 0) continue;
-    if (!cmd_for->list_all && dentry->d_name[0] == '.') continue; // -A
-    if (cmd_for->filter_type && !same_type(cmd_for->filter_type, dentry->d_type)) continue; // -t
-    // TODO: -p -e -r
+    if (strcmp(dentry->d_name, ".") == 0 || strcmp(dentry->d_name, "..") == 0)
+      continue;
 
-    var_size = dir_len + strlen(dentry->d_name) + 2;
+    char *fname = strdup(dentry->d_name);
+    // TODO: -p
+
+    var_size = dir_len + strlen(fname) + 2;
     char var[var_size];
-    snprintf(var, var_size, "%s/%s", dir_name, dentry->d_name);
+    snprintf(var, var_size, "%s/%s", dir_name, fname);
     vars[(int) (cmd_for->var_name)] = var;
 
+    if (cmd_for->filter_type && !same_type(cmd_for->filter_type, dentry->d_type)) // -t
+      continue;
+
+    free(fname);
     tmp = exec_cmd_chain(cmd_for->body, vars);
-    ret = (tmp > ret) ? tmp : ret; // take the max of all the return values
+    ret = MAX(tmp, ret); // take the max of all the return values
   }
 
   vars[(int) cmd_for->var_name] = original_var_value; // reestablish the old
