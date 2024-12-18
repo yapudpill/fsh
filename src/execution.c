@@ -159,14 +159,14 @@ int exec_for_cmd(struct cmd_for *cmd_for, char **vars) {
     }
 
     if (cmd_for->filter_ext) { // -e
-      char *ext;
+      char *ext, found = 0;
       for(ext = strchr(fname+1, '.') ; ext ; ext = strchr(ext+1, '.')){
         if (strcmp(ext+1, cmd_for->filter_ext) == 0) {
-          *ext = '\0';
+          *ext = '\0', found = 1;
           break;
         }
       }
-      if(!ext) continue;
+      if(!found) continue;
     }
 
     if (cmd_for->filter_type && !same_type(cmd_for->filter_type, dentry->d_type)) // -t
