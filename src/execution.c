@@ -145,11 +145,7 @@ int exec_for_cmd(struct cmd_for *cmd_for, char **vars) {
     vars[(int) (cmd_for->var_name)] = var;
 
     if (cmd_for->recursive) { // -r
-      struct stat file;
-      if (stat(var, &file) == -1) {
-        ret = EXIT_FAILURE;
-        break;
-      } else if (S_ISDIR(file.st_mode)) {
+      if (dentry->d_type == DT_DIR) {
         char *old_dir = cmd_for->dir_name;
         cmd_for->dir_name = var;
         tmp_ret = exec_for_cmd(cmd_for, vars);
