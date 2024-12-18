@@ -143,7 +143,21 @@ int exec_for_cmd(struct cmd_for *cmd_for, char **vars) {
     char var[var_size];
     snprintf(var, var_size, "%s/%s", dir_name, fname);
     vars[(int) (cmd_for->var_name)] = var;
-    
+
+    if (cmd_for->recursive) { // -r
+      struct stat file;
+      if (stat(var, &file) == -1) {
+        ret = EXIT_FAILURE;
+        break;
+      } else if (S_ISDIR(file.st_mode)) {
+        char *old_dir = cmd_for->dir_name;
+        cmd_for->dir_name = var;
+        tmp = exec_for_cmd(cmd_for, vars);
+        ret = MAX(tmp, ret);
+        cmd_for->dir_name = old_dir;
+      }
+    }
+
     if (cmd_for->filter_ext) { // -e
       char *ext;
       for(ext = strchr(fname+1, '.') ; ext ; ext = strchr(ext+1, '.')){
