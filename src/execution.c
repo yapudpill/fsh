@@ -135,6 +135,8 @@ int exec_for_cmd(struct cmd_for *cmd_for, char **vars) {
   while ((dentry = readdir(dirp))) {
     if (strcmp(dentry->d_name, ".") == 0 || strcmp(dentry->d_name, "..") == 0)
       continue;
+    if (!cmd_for->list_all && dentry->d_name[0] == '.') // -A
+      continue;
     // TODO: -p
 
     var_size = dir_len + strlen(dentry->d_name) + 2;
@@ -168,9 +170,6 @@ int exec_for_cmd(struct cmd_for *cmd_for, char **vars) {
     }
 
     if (cmd_for->filter_type && !same_type(cmd_for->filter_type, dentry->d_type)) // -t
-      continue;
-
-    if (!cmd_for->list_all && dentry->d_name[0] == '.') // -A
       continue;
 
     tmp_ret = exec_cmd_chain(cmd_for->body, vars);
