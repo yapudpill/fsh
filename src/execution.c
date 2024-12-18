@@ -35,7 +35,7 @@ int setup_out_redir(char *file_name, enum redir_type type) {
       return -1;
   }
 
-  int fd = open(file_name, oflags, 0644);
+  int fd = open(file_name, oflags, 0666);
   if (fd == -1) {
     perror("open");
   }
