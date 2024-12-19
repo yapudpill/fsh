@@ -1,4 +1,4 @@
-#include <commands.h>
+#include "commands.h"
 
 #include <errno.h>
 #include <stddef.h>
@@ -10,7 +10,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include <fsh.h>
+#include "fsh.h"
 
 typedef int (*cmd_func)(int argc, char **argv);
 

@@ -1,4 +1,4 @@
-#include <fsh.h>
+#include "fsh.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,11 +6,11 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 
-#include <cmd_types.h>
-#include <execution.h>
-#include <parsing.h>
+#include "cmd_types.h"
+#include "execution.h"
+#include "parsing.h"
 #ifdef DEBUG
-#include <debug.h>
+#include "debug.h"
 #endif
 
 // global variables' declaration
@@ -18,9 +18,7 @@ char *CWD, *PREV_WORKING_DIR, *HOME;
 int PREV_RETURN_VALUE;
 
 char prompt[52];
-
 char *vars[128];
-
 
 // Updates the prompt (without printing it) according to the current state
 void update_prompt(void) {

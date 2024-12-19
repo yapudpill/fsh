@@ -1,4 +1,4 @@
-#include <execution.h>
+#include "execution.h"
 
 #include <dirent.h>
 #include <fcntl.h>
@@ -9,8 +9,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include <commands.h>
-#include <fsh.h>
+#include "commands.h"
+#include "fsh.h"
 
 // Returns a file descriptor to redirect a command output to a file,
 // using options matching the characteristics of the redirection.

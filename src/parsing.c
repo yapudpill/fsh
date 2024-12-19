@@ -1,12 +1,12 @@
-#include <parsing.h>
+#include "parsing.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
-#include <cmd_types.h>
-#include <fsh.h>
+#include "cmd_types.h"
+#include "fsh.h"
 
 /* PARSING FUNCTIONS:
 parse and free_cmd are the only exposed functions of this file, they are the

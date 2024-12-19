@@ -1,8 +1,8 @@
-#include <debug.h>
+#include "debug.h"
 
 #include <stdio.h>
 
-#include <cmd_types.h>
+#include "cmd_types.h"
 
 void print_redir(int device, char *name, enum redir_type type) {
   if (device == 0) {
