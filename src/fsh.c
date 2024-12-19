@@ -91,9 +91,10 @@ int main(int argc, char* argv[]) {
 
     if (*line != '\0') {
       add_history(line);
-
       cmd = parse(line);
-      if (cmd != NULL) {
+      if (cmd == NULL) {
+        PREV_RETURN_VALUE = parsing_errno;
+      } else {
 #ifdef DEBUG
         print_cmd(cmd);
 #endif
