@@ -5,8 +5,8 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "cmd_types.h"
-#include "fsh.h"
+#include <cmd_types.h>
+#include <fsh.h>
 
 /* PARSING FUNCTIONS:
 parse and free_cmd are the only exposed functions of this file, they are the
@@ -54,11 +54,15 @@ struct cmd *parse(char *line) {
   // load the line in strtok
   token = strtok(line, " ");
 
-  if (parse_cmd(root) == -1 || token) {
+  int ret = parse_cmd(root);
+  if (ret == -1 || token) {
     // if parse_cmd failed or if there is still a token to parse, then the
     // command was malformed
+    if (ret != -1) {
+      // Nothing bad happened during parsing but it stopped to early
+      dprintf(2, "parsing: malformed command\n");
+    }
     free_cmd(root);
-    dprintf(2, "parsing: malformed command\n");
     update_status(ERROR_SYNTAX);
     return NULL;
   }
