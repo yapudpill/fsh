@@ -3,6 +3,7 @@
 
 #include "cmd_types.h"
 
+int wait_cmd(int pid);
 int exec_cmd_chain(struct cmd *cmd_chain, char **vars);
 
 #endif

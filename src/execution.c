@@ -12,6 +12,9 @@
 #include "commands.h"
 #include "fsh.h"
 
+// Number of currently launched parallel loops
+int nb_parallel = 0;
+
 // Returns a file descriptor to redirect a command output to a file,
 // using options matching the characteristics of the redirection.
 int setup_out_redir(char *file_name, enum redir_type type) {
@@ -106,6 +109,21 @@ char **replace_arg_variables(int argc, char **argv, char **vars) {
   return res_argv;
 }
 
+int wait_cmd(int pid) {
+  int wstat;
+  if (waitpid(pid, &wstat, 0) == -1) {
+    perror("waitpid");
+    return EXIT_FAILURE;
+  }
+  // We want fsh to exit with exit code 255 after a process dies because of a
+  // signal. However, we would still like to differentiate inside fsh if the
+  // previous process died because of a signal or if it simply returned 255.
+  // So we use return code -1 to indicate a death by signal.
+  // Because exit codes are encoded on 8 bits, it will automatically be
+  // converted to 255 when exiting !
+  return WIFEXITED(wstat) ? WEXITSTATUS(wstat) : -1;
+}
+
 int same_type(char filter_type, char file_type) {
   switch (filter_type) {
     case 'f': return file_type == DT_REG;
@@ -116,6 +134,29 @@ int same_type(char filter_type, char file_type) {
   }
 }
 
+int exec_parallel(struct cmd *cmd, char **vars, int max) {
+  int ret = -1;
+
+  if (nb_parallel == max) {
+    ret = wait_cmd(-1);
+    nb_parallel--;
+  }
+
+  switch (fork()) {
+    case -1:
+      perror("fork");
+      return EXIT_FAILURE;
+    case 0:
+      ret = exec_cmd_chain(cmd, vars);
+      exit(ret);
+    default:
+      nb_parallel++;
+  }
+
+  return ret;
+}
+
+// Must ensure that nb_parallel is 0 at the end of the execution
 int exec_for_cmd(struct cmd_for *cmd_for, char **vars) {
   char *dir_name = replace_variables(cmd_for->dir_name, vars);
   if (dir_name == NULL) return EXIT_FAILURE; // means allocation error
@@ -130,15 +171,15 @@ int exec_for_cmd(struct cmd_for *cmd_for, char **vars) {
   // save the original value to avoid nested for loops overwriting the original
   char *original_var_value = vars[(int) cmd_for->var_name];
 
-  int ret = EXIT_SUCCESS, tmp_ret, file_len, var_size;
+  int ret = -1, tmp_ret, file_len, var_size;
   struct dirent *dentry;
   while ((dentry = readdir(dirp))) {
     if (strcmp(dentry->d_name, ".") == 0 || strcmp(dentry->d_name, "..") == 0)
       continue;
     if (!cmd_for->list_all && dentry->d_name[0] == '.') // -A
       continue;
-    // TODO: -p
 
+    // make the variable
     file_len = strlen(dentry->d_name);
     var_size = dir_len + file_len + 2;
     char var[var_size];
@@ -165,8 +206,20 @@ int exec_for_cmd(struct cmd_for *cmd_for, char **vars) {
     if (cmd_for->filter_type && !same_type(cmd_for->filter_type, dentry->d_type)) // -t
       continue;
 
-    tmp_ret = exec_cmd_chain(cmd_for->body, vars);
+    if (cmd_for->parallel) { // -p
+      tmp_ret = exec_parallel(cmd_for->body, vars, cmd_for->parallel);
+    } else {
+      tmp_ret = exec_cmd_chain(cmd_for->body, vars);
+    }
     ret = MAX(tmp_ret, ret); // take the max of all the return values
+  }
+
+  if (cmd_for->parallel) { // clean remaining parallel loops
+    while (nb_parallel) {
+      tmp_ret = wait_cmd(-1);
+      ret = MAX(tmp_ret, ret);
+      nb_parallel--;
+    }
   }
 
   vars[(int) cmd_for->var_name] = original_var_value; // reestablish the old variable
