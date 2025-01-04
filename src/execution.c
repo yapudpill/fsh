@@ -156,8 +156,7 @@ int exec_parallel(struct cmd *cmd, char **vars, int max) {
   return ret;
 }
 
-// Must ensure that nb_parallel is 0 at the end of the execution
-int exec_for_cmd(struct cmd_for *cmd_for, char **vars) {
+int exec_for_aux(struct cmd_for *cmd_for, char **vars) {
   char *dir_name = replace_variables(cmd_for->dir_name, vars);
   if (dir_name == NULL) return EXIT_FAILURE; // means allocation error
   int dir_len = strlen(dir_name);
@@ -189,7 +188,7 @@ int exec_for_cmd(struct cmd_for *cmd_for, char **vars) {
     if (cmd_for->recursive && dentry->d_type == DT_DIR) { // -r
       char *old_dir = cmd_for->dir_name;
       cmd_for->dir_name = var;
-      tmp_ret = exec_for_cmd(cmd_for, vars);
+      tmp_ret = exec_for_aux(cmd_for, vars);
       ret = MAX(tmp_ret, ret);
       cmd_for->dir_name = old_dir;
     }
@@ -214,6 +213,21 @@ int exec_for_cmd(struct cmd_for *cmd_for, char **vars) {
     ret = MAX(tmp_ret, ret); // take the max of all the return values
   }
 
+  vars[(int) cmd_for->var_name] = original_var_value; // reestablish the old variable
+
+  // make sure we don't free the original
+  if(dir_name != cmd_for->dir_name) free(dir_name);
+  closedir(dirp);
+
+  return ret;
+}
+
+// Must ensure that nb_parallel is 0 at the end of the execution
+int exec_for_cmd(struct cmd_for *cmd_for, char **vars) {
+  int ret, tmp_ret;
+
+  ret = exec_for_aux(cmd_for, vars);
+
   if (cmd_for->parallel) { // clean remaining parallel loops
     while (nb_parallel) {
       tmp_ret = wait_cmd(-1);
@@ -221,12 +235,6 @@ int exec_for_cmd(struct cmd_for *cmd_for, char **vars) {
       nb_parallel--;
     }
   }
-
-  vars[(int) cmd_for->var_name] = original_var_value; // reestablish the old variable
-
-  // make sure we don't free the original
-  if(dir_name != cmd_for->dir_name) free(dir_name);
-  closedir(dirp);
 
   return ret;
 }
