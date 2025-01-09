@@ -1,5 +1,6 @@
 #include "fsh.h"
 
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -72,6 +73,10 @@ int init_wd_vars() {
 }
 
 int main(int argc, char* argv[]) {
+  struct sigaction sa = { 0 };
+  sa.sa_handler = SIG_IGN;
+  sigaction(SIGTERM, &sa, NULL);
+
   rl_outstream = stderr;
 
   char *line;
