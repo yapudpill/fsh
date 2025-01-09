@@ -79,15 +79,15 @@ cela fonctionne bien, toutes les fonctions de `parsing.c` garantissent que quand
 elles se terminent, la liste est valide et tous les blocs alloués jusque-là y
 ont été attachés. Y compris (et surtout) après une erreur.
 
-# Éxécution
+# Exécution
 La majeure partie de l'exécution se déroule dans
 - [`execution.c`](src/execution.c),
-  où les redirections sont préparées ainsi que l'ensemble de la logique 
+  où les redirections sont préparées ainsi que l'ensemble de la logique
   nécessaire aux commandes structurées et pipes.
 - [`commands.c`](src/commands.c), où sont implémentées les commandes internes
   ainsi que l'appel de commandes externes.
 
-### Grandes lignes
+## Grandes lignes
 Puisque l'intégralité de nos commandes sont structurées sous forme de chaîne
 (potentiellement de longueur 1), le point d'entrée de l'exécution est la
 fonction `exec_cmd_chain`. Elle se débrouille ensuite pour appeler
@@ -104,7 +104,7 @@ Lorsqu'on décide de finalement appeler une commande interne ou externe, c'est
 `call_command_and_wait` dans [`commands.c`](src/commands.c) qui prend la
 relève.
 
-### `exec_cmd_chain`: préparation des pipes et forks
+## `exec_cmd_chain`: préparation des pipes et forks
 Elle compte d'abord le nombre de pipes à initialiser pour exécuter des
 commandes en même temps (donc jusqu'au prochain `;` ou fin de commande). Ceci
 permet d'initialiser un tableau qui contiendra les `pid` des processus lancés.
@@ -120,7 +120,7 @@ Enfin, si une commande n'est pas suivie d'un pipe, on appelle `exec_head_cmd`
 directement dans le parent (mais toujours avec la bonne redirection d'entrée),
 puis on `waitpid` l'ensemble des pids des fork.
 
-### `exec_simple_cmd`: injection de variables et redirection de fichiers
+## `exec_simple_cmd`: injection de variables et redirection de fichiers
 Ici, on créé un nouvel `argv` à partir du `argv` parsed plus tôt, mais en
 y injectant des variables si nécessaire à l'aide de `inject_arg_dependencies`.
 On injecte également les variables dans les fichiers utilisés pour les
@@ -134,7 +134,7 @@ utiliser `open` pour ouvrir les fichiers de redirection.
 C'est maintenant qu'on appelle `call_command_and_wait`, et finalement on `close`
 les fichiers ouverts et `free` les strings créées.
 
-### `call_command_and_wait`: dispatch entre commandes internes et externes
+## `call_command_and_wait`: dispatch entre commandes internes et externes
 Ici, on reçoit en argument le `argc` et le `argv` d'une commande interne ou
 externe. Dans le cas d'une commande interne, on utiliser `dup2` trois fois
 pour réaliser les redirections sans créer de processus fils afin d'avoir accès

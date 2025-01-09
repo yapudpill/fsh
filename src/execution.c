@@ -12,6 +12,9 @@
 #include "commands.h"
 #include "fsh.h"
 
+// Number of currently launched parallel loops
+int nb_parallel = 0;
+
 // Returns a file descriptor to redirect a command output to a file,
 // using options matching the characteristics of the redirection.
 int setup_out_redir(char *file_name, enum redir_type type) {
@@ -106,6 +109,21 @@ char **replace_arg_variables(int argc, char **argv, char **vars) {
   return res_argv;
 }
 
+int wait_cmd(int pid) {
+  int wstat;
+  if (waitpid(pid, &wstat, 0) == -1) {
+    perror("waitpid");
+    return EXIT_FAILURE;
+  }
+  // We want fsh to exit with exit code 255 after a process dies because of a
+  // signal. However, we would still like to differentiate inside fsh if the
+  // previous process died because of a signal or if it simply returned 255.
+  // So we use return code -1 to indicate a death by signal.
+  // Because exit codes are encoded on 8 bits, it will automatically be
+  // converted to 255 when exiting !
+  return WIFEXITED(wstat) ? WEXITSTATUS(wstat) : -1;
+}
+
 int same_type(char filter_type, char file_type) {
   switch (filter_type) {
     case 'f': return file_type == DT_REG;
@@ -116,7 +134,29 @@ int same_type(char filter_type, char file_type) {
   }
 }
 
-int exec_for_cmd(struct cmd_for *cmd_for, char **vars) {
+int exec_parallel(struct cmd *cmd, char **vars, int max) {
+  int ret = -1;
+
+  if (nb_parallel == max) {
+    ret = wait_cmd(-1);
+    nb_parallel--;
+  }
+
+  switch (fork()) {
+    case -1:
+      perror("fork");
+      return EXIT_FAILURE;
+    case 0:
+      ret = exec_cmd_chain(cmd, vars);
+      exit(ret);
+    default:
+      nb_parallel++;
+  }
+
+  return ret;
+}
+
+int exec_for_aux(struct cmd_for *cmd_for, char **vars) {
   char *dir_name = replace_variables(cmd_for->dir_name, vars);
   if (dir_name == NULL) return EXIT_FAILURE; // means allocation error
   int dir_len = strlen(dir_name);
@@ -130,53 +170,71 @@ int exec_for_cmd(struct cmd_for *cmd_for, char **vars) {
   // save the original value to avoid nested for loops overwriting the original
   char *original_var_value = vars[(int) cmd_for->var_name];
 
-  int ret = EXIT_SUCCESS, tmp_ret, var_size;
+  int ret = -1, tmp_ret, file_len, var_size;
   struct dirent *dentry;
   while ((dentry = readdir(dirp))) {
     if (strcmp(dentry->d_name, ".") == 0 || strcmp(dentry->d_name, "..") == 0)
       continue;
     if (!cmd_for->list_all && dentry->d_name[0] == '.') // -A
       continue;
-    // TODO: -p
 
-    var_size = dir_len + strlen(dentry->d_name) + 2;
+    // make the variable
+    file_len = strlen(dentry->d_name);
+    var_size = dir_len + file_len + 2;
     char var[var_size];
     snprintf(var, var_size, "%s/%s", dir_name, dentry->d_name);
     vars[(int) (cmd_for->var_name)] = var;
 
-    if (cmd_for->recursive) { // -r
-      if (dentry->d_type == DT_DIR) {
-        char *old_dir = cmd_for->dir_name;
-        cmd_for->dir_name = var;
-        tmp_ret = exec_for_cmd(cmd_for, vars);
-        ret = MAX(tmp_ret, ret);
-        cmd_for->dir_name = old_dir;
-      }
+    if (cmd_for->recursive && dentry->d_type == DT_DIR) { // -r
+      char *old_dir = cmd_for->dir_name;
+      cmd_for->dir_name = var;
+      tmp_ret = exec_for_aux(cmd_for, vars);
+      ret = MAX(tmp_ret, ret);
+      cmd_for->dir_name = old_dir;
     }
 
     if (cmd_for->filter_ext) { // -e
-      char *ext, found = 0;
-      for (ext = strchr(var + dir_len + 2, '.') ; ext ; ext = strchr(ext+1, '.')){
-        if (strcmp(ext+1, cmd_for->filter_ext) == 0) {
-          *ext = '\0', found = 1;
-          break;
-        }
-      }
-      if(!found) continue;
+      int ext_len = strlen(cmd_for->filter_ext);
+      if (ext_len >= file_len) continue; // too big to be an extension
+      char *ext_start = var + var_size - ext_len - 2;
+      if (*ext_start != '.' || strcmp(ext_start + 1, cmd_for->filter_ext) != 0)
+        continue;
+      *ext_start = '\0';
     }
 
     if (cmd_for->filter_type && !same_type(cmd_for->filter_type, dentry->d_type)) // -t
       continue;
 
-    tmp_ret = exec_cmd_chain(cmd_for->body, vars);
+    if (cmd_for->parallel) { // -p
+      tmp_ret = exec_parallel(cmd_for->body, vars, cmd_for->parallel);
+    } else {
+      tmp_ret = exec_cmd_chain(cmd_for->body, vars);
+    }
     ret = MAX(tmp_ret, ret); // take the max of all the return values
   }
 
-  vars[(int) cmd_for->var_name] = original_var_value; // reestablish the old
+  vars[(int) cmd_for->var_name] = original_var_value; // reestablish the old variable
 
   // make sure we don't free the original
   if(dir_name != cmd_for->dir_name) free(dir_name);
   closedir(dirp);
+
+  return ret;
+}
+
+// Must ensure that nb_parallel is 0 at the end of the execution
+int exec_for_cmd(struct cmd_for *cmd_for, char **vars) {
+  int ret, tmp_ret;
+
+  ret = exec_for_aux(cmd_for, vars);
+
+  if (cmd_for->parallel) { // clean remaining parallel loops
+    while (nb_parallel) {
+      tmp_ret = wait_cmd(-1);
+      ret = MAX(tmp_ret, ret);
+      nb_parallel--;
+    }
+  }
 
   return ret;
 }
@@ -191,14 +249,14 @@ int exec_simple_cmd(struct cmd_simple *cmd_simple, char **vars) {
   char *redir_name[3] = { cmd_simple->in, cmd_simple->out, cmd_simple->err };
 
   // inject in redirections
-  char *injected_redir[3] = { "", "", "" };
+  char *injected_redir[3] = {0};
   for (i = 0; i < 3; i++) {
     if (redir_name[i]) {
       injected_redir[i] = replace_variables(redir_name[i], vars);
-    }
-    if (injected_redir[i] == NULL) {
-      ret = EXIT_FAILURE;
-      goto cleanup_injections;
+      if (injected_redir[i] == NULL) {
+        ret = EXIT_FAILURE;
+        goto cleanup_injections;
+      }
     }
   }
 
@@ -219,20 +277,20 @@ int exec_simple_cmd(struct cmd_simple *cmd_simple, char **vars) {
   cleanup_fd:
   // Cleanup redirections if necessary
   for (i = 0; i < 3; i++) {
-    if (redir[i] != -2) {
+    if (redir[i] >= 0) {
       close(redir[i]);
     }
   }
 
   cleanup_injections:
-  for (i = 0;i < cmd_simple->argc; i++) {
+  for (i = 0; i < cmd_simple->argc; i++) {
     if (cmd_simple->argv[i] != injected_argv[i]) {
       free(injected_argv[i]);
     }
   }
   free(injected_argv);
   for (i = 0; i < 3; i++) {
-    if (*injected_redir[i] != '\0' && injected_redir[i] != redir_name[i]) {
+    if (injected_redir[i] && injected_redir[i] != redir_name[i]) {
       free(injected_redir[i]);
     }
   }

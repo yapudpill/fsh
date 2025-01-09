@@ -7,10 +7,10 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <sys/wait.h>
 #include <unistd.h>
 
 #include "fsh.h"
+#include "execution.h"
 
 typedef int (*cmd_func)(int argc, char **argv);
 
@@ -193,24 +193,7 @@ int call_external_cmd(int argc, char **argv, int redir[3]) {
       perror("redirect_exec");
       exit(EXIT_FAILURE);
     default:
-      int wstat;
-      if (waitpid(pid, &wstat, 0) == -1) {
-        perror("waitpid");
-        return EXIT_FAILURE;
-      }
-      if (WIFEXITED(wstat)) {
-        return WEXITSTATUS(wstat);
-      }
-      if (WIFSIGNALED(wstat)) {
-        // We want fsh to exit with exit code 255 if we exit right after a
-        // process dies because of a signal. However, we would still like to
-        // differentiate inside fsh if the previous process died because of a
-        // signal or if it simply returned 255. So we use return code -1 to
-        // indicate a death by signal. Because exit codes are encoded on 8 bits,
-        // it will automatically be converted to 255 when exiting !
-        return -1;
-      }
-      return EXIT_FAILURE;
+      return wait_cmd(pid);
   }
 }
 

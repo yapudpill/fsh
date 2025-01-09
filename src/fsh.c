@@ -46,7 +46,7 @@ void update_prompt(void) {
     strcpy(head, CWD);
     head += len;
   } else { // CWD is too big
-    /* Note : 'str - strlen(str) - n' points to the nth character of str
+    /* Note : 'str + strlen(str) - n' points to the nth character of str
      * starting from the end */
     head += sprintf(head, "...%s", CWD + len - (space_left - 3));
   }
