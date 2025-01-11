@@ -132,18 +132,18 @@ int cmd_exit(int argc, char **argv) {
 int cmd_autotune(int argc, char **argv) {
   size_t ret;
   char c;
-  while ((ret = read(1, &c, 1)) != 0) {
-    if (ret == -1) {
-      if (errno == EINTR) continue;
-      perror("autotune: read");
-      return EXIT_FAILURE;
-    }
+  while ((ret = read(0, &c, 1)) > 0) {
     if (c == '\n') continue;
     write(1, &c, 1);
     usleep(200000);
     write(1, &c, 1);
     usleep(200000);
     write(1, "\n", 1);
+  }
+
+  if (ret == -1) {
+    perror("autotune: read");
+    return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;
 }
