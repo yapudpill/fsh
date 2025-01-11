@@ -1,11 +1,15 @@
 #include "fsh.h"
 
+#include <errno.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <readline/readline.h>
 #include <readline/history.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+
 
 #include "cmd_types.h"
 #include "execution.h"
@@ -14,9 +18,14 @@
 #include "debug.h"
 #endif
 
+void handler(int sig) {
+  sig_received = sig;
+}
+
 // global variables' declaration
 char *CWD, *PREV_WORKING_DIR, *HOME;
 int PREV_RETURN_VALUE;
+volatile sig_atomic_t sig_received = 0;
 
 char prompt[52];
 char *vars[128];
@@ -29,7 +38,7 @@ void update_prompt(void) {
   head += sprintf(head, "\001\033[%dm\002", PREV_RETURN_VALUE ? 91 : 32);
 
   int code_len;
-  if (PREV_RETURN_VALUE == -1) {
+  if (PREV_RETURN_VALUE < 0) {
     strcpy(head, "[SIG]");
     code_len = 5;
   } else {
@@ -73,9 +82,11 @@ int init_wd_vars() {
 }
 
 int main(int argc, char* argv[]) {
-  struct sigaction sa = { 0 };
+  struct sigaction sa = { 0 }, sa2 = { 0 };
   sa.sa_handler = SIG_IGN;
+  sa2.sa_handler = &handler;
   sigaction(SIGTERM, &sa, NULL);
+  sigaction(SIGINT, &sa2, NULL);
 
   rl_outstream = stderr;
 
@@ -90,6 +101,15 @@ int main(int argc, char* argv[]) {
     line = readline(prompt);
     if (line == NULL) {
       break;
+    }
+
+    if(sig_received) {
+      while(wait(NULL) > 0);
+      if(errno == ECHILD) sig_received = 0;
+      else {
+        perror("wait");
+        return EXIT_FAILURE;
+      }
     }
 
     if (*line != '\0') {

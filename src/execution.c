@@ -2,6 +2,7 @@
 
 #include <dirent.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -112,15 +113,17 @@ char **replace_arg_variables(int argc, char **argv, char **vars) {
 int wait_cmd(int pid) {
   int wstat;
   if (waitpid(pid, &wstat, 0) == -1) {
-    perror("waitpid");
+    if(!sig_received) perror("waitpid");
     return EXIT_FAILURE;
   }
+
   // We want fsh to exit with exit code 255 after a process dies because of a
   // signal. However, we would still like to differentiate inside fsh if the
   // previous process died because of a signal or if it simply returned 255.
   // So we use return code -1 to indicate a death by signal.
   // Because exit codes are encoded on 8 bits, it will automatically be
   // converted to 255 when exiting !
+  if(WIFSIGNALED(wstat)) sig_received = WTERMSIG(wstat);
   return WIFEXITED(wstat) ? WEXITSTATUS(wstat) : -1;
 }
 
@@ -172,7 +175,7 @@ int exec_for_aux(struct cmd_for *cmd_for, char **vars) {
 
   int ret = -1, tmp_ret, file_len, var_size;
   struct dirent *dentry;
-  while ((dentry = readdir(dirp))) {
+  while ((dentry = readdir(dirp)) && sig_received != SIGINT) {
     if (strcmp(dentry->d_name, ".") == 0 || strcmp(dentry->d_name, "..") == 0)
       continue;
     if (!cmd_for->list_all && dentry->d_name[0] == '.') // -A
@@ -219,7 +222,7 @@ int exec_for_aux(struct cmd_for *cmd_for, char **vars) {
   if(dir_name != cmd_for->dir_name) free(dir_name);
   closedir(dirp);
 
-  return ret;
+  return (sig_received == SIGINT) ? -1 : ret;
 }
 
 // Must ensure that nb_parallel is 0 at the end of the execution
@@ -339,7 +342,7 @@ int exec_cmd_chain(struct cmd *cmd_chain, char **vars) {
   int ret, pipe_count, next_in, pid, i, p[2];
   struct cmd *tmp;
 
-  while (cmd_chain) {
+  while (cmd_chain && sig_received != SIGINT) {
     // count number of pipes
     pipe_count = 0;
     tmp = cmd_chain;
@@ -385,11 +388,11 @@ int exec_cmd_chain(struct cmd *cmd_chain, char **vars) {
 
     // wait of all commands of the pipeline to finish
     for (int i = 0; i < pipe_count; i++) {
-      waitpid(pids[i], NULL, 0);
+      wait_cmd(pids[i]);
     }
 
     cmd_chain = cmd_chain->next;
   }
 
-  return ret;
+  return (sig_received == SIGINT) ? -1 : ret;
 }
