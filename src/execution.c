@@ -398,7 +398,9 @@ int exec_cmd_chain(struct cmd *cmd_chain, char **vars) {
         case 0:
           dup2(next_in, 0);
           dup2(p[1], 1);
+          close(p[1]);
           close(p[0]);
+          close(next_in);
           ret = exec_head_cmd(cmd_chain, vars);
 
           if (sig_received == SIGINT) raise_sigint();
