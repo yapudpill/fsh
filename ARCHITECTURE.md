@@ -203,5 +203,4 @@ sous-shell va simplement retourner la valeur 255 au parent.
 
 Enfin, dans les boucles et commandes structurées, on vérifie après chaque tour si la
 valeur de `sig_received` vaut `SIGINT`. Dans ce cas, on ne poursuit pas
-l'exécution, et une boucle de `wait(NULL)` dans le `main` se charge de traiter
-les potentiels processus zombies restants.
+l'exécution.
