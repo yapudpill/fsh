@@ -32,7 +32,7 @@ est initialisé une fois au lancement du shell, et `g_prev_ret_val` est mis à
 jour après l'exécution de chaque commande (dans le sens d'une hiérarchie de
 commande, pas à chaque commande simple) entrée par l'utilisateur.
 
-# List des commandes internes
+# Liste des commandes internes
 (Implémentées dans `commands.c`)
 
 - `pwd`
