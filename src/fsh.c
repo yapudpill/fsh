@@ -19,7 +19,7 @@
 #endif
 
 void sig_handler(int sig) {
-  g_sig_received = sig;
+  g_sig_received = 1;
 }
 
 // global variables' declaration, prefixed with `g_` to recognize them
@@ -117,17 +117,9 @@ int main(int argc, char* argv[]) {
 #ifdef DEBUG
         print_cmd(cmd);
 #endif
+        g_sig_received = 0;
         g_prev_ret_val = exec_cmd_chain(cmd, g_vars);
         free_cmd(cmd);
-      }
-    }
-
-    if (g_sig_received) {
-      while(wait(NULL) > 0);
-      if (errno == ECHILD) g_sig_received = 0;
-      else {
-        perror("wait");
-        return EXIT_FAILURE;
       }
     }
 
