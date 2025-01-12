@@ -103,15 +103,6 @@ int main(int argc, char* argv[]) {
       break;
     }
 
-    if(sig_received) {
-      while(wait(NULL) > 0);
-      if(errno == ECHILD) sig_received = 0;
-      else {
-        perror("wait");
-        return EXIT_FAILURE;
-      }
-    }
-
     if (*line != '\0') {
       add_history(line);
       cmd = parse(line);
@@ -123,6 +114,15 @@ int main(int argc, char* argv[]) {
 #endif
         PREV_RETURN_VALUE = exec_cmd_chain(cmd, vars);
         free_cmd(cmd);
+      }
+    }
+
+    if (sig_received) {
+      while(wait(NULL) > 0);
+      if(errno == ECHILD) sig_received = 0;
+      else {
+        perror("wait");
+        return EXIT_FAILURE;
       }
     }
 
