@@ -19,7 +19,7 @@ typedef int (*cmd_func)(int argc, char **argv);
  * Internal command. Takes no argument, and prints on stdout the current
  * working directory of the shell.
  *
- * Returns EXIT_SUCCESS on success, EXIT_FAILURE on failure.
+ * @return EXIT_SUCCESS on success, EXIT_FAILURE on failure.
  */
 int cmd_pwd(int argc, char **argv) {
   // Considering that the variable CWD is always updated using `getcwd` at
@@ -40,9 +40,15 @@ int cmd_pwd(int argc, char **argv) {
  * Only applies to the subshell it is executed in. For exemple, it does not
  * apply the directory change to the main shell when called in a parallel loop.
  *
- * Returns EXIT_SUCCESS on success, EXIT_FAILURE on failure.
- * If the execution results in an invalid state of the subshell, exits the
- * subshell entirely.
+ * When called without an argument, defaults to moving to the HOME directory,
+ * and fails if the variable is not set.
+ *
+ * When called with `-`, moves to the previous working directory, and fails if
+ * there is no previous working directory.
+ *
+ * @return EXIT_SUCCESS on success, EXIT_FAILURE on failure.
+ *         If the execution results in an invalid state of the subshell, exits the
+ *         subshell entirely.
  */
 int cmd_cd(int argc, char **argv) {
   if (argc > 2) {
@@ -95,7 +101,7 @@ int cmd_cd(int argc, char **argv) {
 /**
  * Internal command. Takes a file reference, and prints its type.
  *
- * Returns EXIT_SUCCESS on success, EXIT_FAILURE on failure.
+ * @return EXIT_SUCCESS on success, EXIT_FAILURE on failure.
  */
 int cmd_ftype(int argc, char **argv) {
   if (argc != 2) {
@@ -134,7 +140,7 @@ int cmd_ftype(int argc, char **argv) {
  * Internal command. Exits the current fsh subshell, using the code passed in
  * argument if available, otherwise the previous command return code.
  *
- * Returns EXIT_FAILURE in case of invalid usage.
+ * @return EXIT_FAILURE in case of invalid usage.
  */
 int cmd_exit(int argc, char **argv) {
   if (argc > 2) {
@@ -161,7 +167,7 @@ int cmd_exit(int argc, char **argv) {
  * Internal debug command. Useful to debug I/O. For every char it receives in
  * stdin, slowly repeats it twice on stdout and adds a new line.
  *
- * Returns EXIT_SUCCESS on success, EXIT_FAILURE on failure.
+ * @return EXIT_SUCCESS on success, EXIT_FAILURE on failure.
  */
 int cmd_autotune(int argc, char **argv) {
   size_t ret;
@@ -186,6 +192,8 @@ int cmd_autotune(int argc, char **argv) {
 /**
  * Internal debug command. Simply returns the code passed in argument, or 1 by
  * default.
+ *
+ * @return the value passed in argument
  */
 int cmd_oopsie(int argc, char **argv) {
   if (argc > 2) {
@@ -214,6 +222,9 @@ int cmd_oopsie(int argc, char **argv) {
  *
  * Also performs the necessary redirections so that the fd i refers to
  * redir[i], for each i in {0, 1, 2}
+ *
+ * @return the return code of the command, or -1 if it was terminated by a
+ *         signal
  */
 int call_external_cmd(int argc, char **argv, int redir[3]) {
   int pid, i;

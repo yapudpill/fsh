@@ -228,10 +228,10 @@ int wait_cmd(int pid) {
 
   do {
     ret = waitpid(pid, &wstat, 0);
-  } while ( ret == -1 && errno == EINTR); // interruption of wait can lead to problems in parallel execution and much more
+  } while (ret == -1 && errno == EINTR); // interruption of wait can lead to problems in parallel execution and much more
 
   if (ret == -1) {
-    if(!g_sig_received) perror("waitpid");
+    if (!g_sig_received) perror("waitpid");
     return 256;  // to differentiate between error and actual return value
   }
 
@@ -241,7 +241,7 @@ int wait_cmd(int pid) {
   // So we use return code -1 to indicate a death by signal.
   // Because exit codes are encoded on 8 bits, it will automatically be
   // converted to 255 when exiting !
-  if(WIFSIGNALED(wstat)) g_sig_received = WTERMSIG(wstat);
+  if (WIFSIGNALED(wstat)) g_sig_received = WTERMSIG(wstat);
   return WIFEXITED(wstat) ? WEXITSTATUS(wstat) : -1;
 }
 
@@ -287,7 +287,7 @@ int exec_parallel(struct cmd *cmd, char **vars, int max) {
 
   if (g_nb_parallel == max) {
     ret = wait_cmd(-1);
-    if(ret == 256) return EXIT_FAILURE;
+    if (ret == 256) return EXIT_FAILURE;
     g_nb_parallel--;
   }
 
@@ -363,7 +363,7 @@ int exec_for_aux(struct cmd_for *cmd_for, char **vars) {
       cmd_for->dir_name = old_dir;
     }
 
-    if(g_sig_received == SIGINT) break; // shouldn't move on to executing the body on the directory if the recursion was interrupted
+    if (g_sig_received == SIGINT) break; // shouldn't move on to executing the body on the directory if the recursion was interrupted
 
     if (cmd_for->filter_ext) { // -e
       int ext_len = strlen(cmd_for->filter_ext);
@@ -416,7 +416,7 @@ int exec_for_cmd(struct cmd_for *cmd_for, char **vars) {
   if (cmd_for->parallel) { // clean remaining parallel loops
     while (g_nb_parallel) {
       tmp_ret = wait_cmd(-1);
-      if(ret == 256) return EXIT_FAILURE;
+      if (tmp_ret == 256) return EXIT_FAILURE;
       ret = max_or_neg(ret, tmp_ret);
       g_nb_parallel--;
     }
@@ -518,6 +518,9 @@ int exec_if_else_cmd(struct cmd_if_else *cmd_if_else, char **vars) {
   int ret = EXIT_SUCCESS;
 
   int test_ret = exec_cmd_chain(cmd_if_else->cmd_test, vars);
+
+  // No need to check if a SIGINT was received here, it is already handled
+  // by exec_cmd_chain
 
   if (test_ret == EXIT_SUCCESS) {
     // Test succeeded
@@ -622,8 +625,8 @@ int exec_cmd_chain(struct cmd *cmd_chain, char **vars) {
     close(in_save);
 
     // wait of all commands of the pipeline to finish
-    for (int i = 0; i < pipe_count; i++) {
-      if(wait_cmd(pids[i]) == 256) return EXIT_FAILURE;
+    for (i = 0; i < pipe_count; i++) {
+      if (wait_cmd(pids[i]) == 256) return EXIT_FAILURE;
     }
 
     cmd_chain = cmd_chain->next;

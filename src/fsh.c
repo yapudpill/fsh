@@ -124,7 +124,7 @@ int main(int argc, char* argv[]) {
 
     if (g_sig_received) {
       while(wait(NULL) > 0);
-      if(errno == ECHILD) g_sig_received = 0;
+      if (errno == ECHILD) g_sig_received = 0;
       else {
         perror("wait");
         return EXIT_FAILURE;
