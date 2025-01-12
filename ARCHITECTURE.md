@@ -16,6 +16,34 @@ Cette structure assure une séparation claire entre les fichiers de code source,
 les interfaces et les fichiers de compilation, facilitant ainsi la gestion du
 projet et la collaboration.
 
+# Environnement du shell
+Des simples variables globales se chargent de stocker l'environnement actuel du
+shell:
+```c
+char *g_cwd; // Répertoire courant
+char *g_prev_wd; // Répertoire courant précédent
+char *g_home; // Chemin vers le HOME de l'utilisateur
+int g_prev_ret_val; // Valeur de retour précédente
+volatile sig_atomic_t g_sig_received = 0;
+```
+
+`g_cwd` et `g_prev_wd` sont mis à jour par la commande interne `cd`, `g_home`
+est initialisé une fois au lancement du shell, et `g_prev_ret_val` est mis à
+jour après l'exécution de chaque commande (dans le sens d'une hiérarchie de
+commande, pas à chaque commande simple) entrée par l'utilisateur.
+
+# List des commandes internes
+(Implémentées dans `commands.c`)
+
+- `pwd`
+- `cd`
+- `ftype`
+- `exit`
+- `autotune` (commande de debug, lis chaque caractère sur stdin et le répète 2
+  fois lentement)
+- `return` (retourne avec le code de retour donné en argument)
+- `umask` (permet de configurer l'umask)
+
 # Parsing
 
 ## Types de commandes
@@ -39,7 +67,7 @@ Les commandes sont représentées par une liste chaînée de `struct cmd`. Chaqu
 
 Voici le contenu des 3 types de détail possibles :
 - **`cmd_simple`** :
-  - Deux champs `argc` et `argv` représentant la commande simple en elle même
+  - Deux champs `argc` et `argv` représentant la commande simple en elle-même
   - Trois champs `in`, `out` et `err` contenant un nom de fichier en cas de
     redirection, ou `NULL` s'il n'y en a pas
   - Deux champs `out_type` et `err_type` représentant le type de redirection
@@ -111,7 +139,7 @@ permet d'initialiser un tableau qui contiendra les `pid` des processus lancés.
 Ensuite pour chaque commande, on prépare un pipe, on `fork`, et on `dup2` dans
 l'enfant pour utiliser le descripteur du fichier du pipe, et on y appelle
 `exec_head_cmd` avec la commande correspondante.
-Cela implque que, dans une pipeline de commandes simples, les commandes seront
+Cela implique que, dans une pipeline de commandes simples, les commandes seront
 exécutées dans des processus petits-fils. Cela offre une plus grande
 flexibilité, notamment pour éventuellement implémenter des pipes entre
 commandes structurées.
@@ -161,8 +189,9 @@ Après avoir appliqué le filtrage, on exécute le corps de la boucle. Si le
 parallélisme est activé, on va appeler `exec_parallel` plutôt que directement
 `exec_cmd_chain`. `exec_parallel` va lancer la commande en parallèle, sauf si
 la limite de processus est déjà atteinte, auquel cas on attend qu'elle se
-termine. C'est aussi l'occasion de récupérer la valeur de retour de la dernière
-commande lancée en parallèle.
+termine. Pour compter les processus déjà lancés en parallèle, on utilise une
+variable globale `g_nb_parallel`. C'est aussi l'occasion de récupérer la valeur
+de retour de la dernière commande lancée en parallèle.
 
 
 ## `call_command_and_wait`: dispatch entre commandes internes et externes
@@ -178,29 +207,28 @@ Dans le cas d'une commande externe, on appelle `call_external_cmd` qui se
 charge de créer un fork qui va faire ses redirections avec `dup2` et lancer
 la commande avec `execvp`
 
-## Gestion des signaux
-Une variable globale `sig_received` est mise à la valeur d'un signal reçu
-dès qu'un signal `SIGINT` est reçu par `fsh`, ou qu'une commande reçoit un
-signal.
+# Gestion des signaux
+Une variable globale `g_sig_received` est mise à 1 dès qu'un signal `SIGINT`
+est reçu par `fsh`, ou qu'une commande reçoit ce signal.
 
 Pour détecter un `SIGINT` reçu par fsh, il suffit d'un handler (`handler`)
 enregistré avec `sigaction` au début du `main` dans `fsh.c`. On en profite
 également pour ignorer les `SIGTERM` à ce moment.
 
 La détection des signaux reçu par les processus fils se fait grâce à
-`wait_cmd`. Dans la majorité du reste du code, on n'appelle que rarement les
-fonctions `wait` directement (sauf si on sait déjà que `fsh` ou un enfant a
-reçu `SIGINT`). À la place, on utilise `wait_cmd`, qui se charge de récupérer
-la valeur de retour de la commande si elle s'est terminée normalement, et de
-mettre à jour `sig_received` si elle a été arrêtée par un signal.
+`wait_cmd`. Dans le reste du code, on n'appelle jamais les
+fonctions `wait` directement. À la place, on utilise `wait_cmd`, qui se charge
+de récupérer la valeur de retour de la commande si elle s'est terminée
+normalement, et de mettre à jour `g_sig_received` si elle a été arrêtée par un
+`SIGINT`.
 
 De plus, lorsqu'une commande dans un sous-shell reçoit SIGINT, et uniquement
 cette commande —cette situation ne survient pas lors d'un Ctrl-C, car dans ce
 cas, `SIGINT` est également envoyé au sous-shell lui-même— le sous-shell va
-se tuer avec SIGINT soi-même, ceci afin de transmettre au parent l'information
+se tuer avec SIGINT lui-même, ceci afin de transmettre au parent l'information
 qu'un sous-processus est mort par SIGINT. En effet, si on ne fait pas ça, le
 sous-shell va simplement retourner la valeur 255 au parent.
 
-Enfin, dans les boucles et commandes structurées, on vérifie après chaque tour si la
-valeur de `sig_received` vaut `SIGINT`. Dans ce cas, on ne poursuit pas
+Enfin, dans les boucles et commandes structurées, on vérifie après chaque tour
+si la valeur de `g_sig_received` vaut `1`. Dans ce cas, on ne poursuit pas
 l'exécution.

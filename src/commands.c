@@ -266,9 +266,10 @@ int call_external_cmd(int argc, char **argv, int redir[3]) {
       perror("fork");
       return EXIT_FAILURE;
     case 0:
-        struct sigaction sa = { 0 };
-        sa.sa_handler = SIG_DFL;
-        sigaction(SIGTERM, &sa, NULL);
+      // Restore the default behaviour regarding SIGTERM
+      struct sigaction sa = { 0 };
+      sa.sa_handler = SIG_DFL;
+      sigaction(SIGTERM, &sa, NULL);
       for (i = 0; i < 3; i++) {
         if (redir[i] != -2) {
           if (dup2(redir[i], i) == -1) {
@@ -315,6 +316,8 @@ int call_command_and_wait(int argc, char **argv, int redir[3]) {
 
   int ret;
   if (internal_function) {
+    // Need to save the current file descriptors as we will execute the command
+    // in the current process and not a subshell
     int i, saves[3];
     for (i = 0; i < 3; i++) {
       if (redir[i] != -2) {
@@ -323,6 +326,8 @@ int call_command_and_wait(int argc, char **argv, int redir[3]) {
       }
     }
     ret = internal_function(argc, argv);
+
+    // Restore the file descriptors
     for (i = 0; i < 3; i++) {
       if (redir[i] != -2) {
         dup2(saves[i], i);
