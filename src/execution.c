@@ -1,5 +1,6 @@
 #include "execution.h"
 
+#include <errno.h>
 #include <dirent.h>
 #include <fcntl.h>
 #include <signal.h>
@@ -133,8 +134,13 @@ char **replace_arg_variables(int argc, char **argv, char **vars) {
 }
 
 int wait_cmd(int pid) {
-  int wstat;
-  if (waitpid(pid, &wstat, 0) == -1) {
+  int wstat, ret;
+
+  do {
+    ret = waitpid(pid, &wstat, 0);
+  } while ( ret == -1 && errno == EINTR); // interruption of wait can lead to problems in parallel execution and much more
+
+  if (ret == -1) {
     if(!sig_received) perror("waitpid");
     return EXIT_FAILURE;
   }
