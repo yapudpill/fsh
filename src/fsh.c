@@ -18,7 +18,7 @@
 #include "debug.h"
 #endif
 
-void handler(int sig) {
+void sig_handler(int sig) {
   sig_received = sig;
 }
 
@@ -82,11 +82,11 @@ int init_wd_vars() {
 }
 
 int main(int argc, char* argv[]) {
-  struct sigaction sa = { 0 }, sa2 = { 0 };
+  struct sigaction sa = { 0 };
   sa.sa_handler = SIG_IGN;
-  sa2.sa_handler = &handler;
   sigaction(SIGTERM, &sa, NULL);
-  sigaction(SIGINT, &sa2, NULL);
+  sa.sa_handler = sig_handler;
+  sigaction(SIGINT, &sa, NULL);
 
   rl_outstream = stderr;
 

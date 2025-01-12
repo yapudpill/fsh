@@ -6,7 +6,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -15,6 +14,16 @@
 
 // Number of currently launched parallel loops
 int nb_parallel = 0;
+
+/**
+ * Returns the maximum of two integers, unless one of them is negative. If either
+ * integer is negative, the negative value is returned.
+ */
+int max_or_neg(int a, int b) {
+  if (a < 0) return a;
+  if (b < 0) return b;
+  return a > b ? a : b;
+}
 
 // Returns a file descriptor to redirect a command output to a file,
 // using options matching the characteristics of the redirection.
@@ -192,7 +201,7 @@ int exec_for_aux(struct cmd_for *cmd_for, char **vars) {
       char *old_dir = cmd_for->dir_name;
       cmd_for->dir_name = var;
       tmp_ret = exec_for_aux(cmd_for, vars);
-      if(ret != -1) ret = (tmp_ret == -1) ? -1 : MAX(tmp_ret, ret);
+      ret = max_or_neg(ret, tmp_ret);
       cmd_for->dir_name = old_dir;
     }
 
@@ -213,7 +222,7 @@ int exec_for_aux(struct cmd_for *cmd_for, char **vars) {
     } else {
       tmp_ret = exec_cmd_chain(cmd_for->body, vars);
     }
-    if(ret != -1) ret = (tmp_ret == -1) ? -1 : MAX(tmp_ret, ret); // take the max of all the return values
+    ret = max_or_neg(ret, tmp_ret);
   }
 
   vars[(int) cmd_for->var_name] = original_var_value; // reestablish the old variable
@@ -222,7 +231,8 @@ int exec_for_aux(struct cmd_for *cmd_for, char **vars) {
   if(dir_name != cmd_for->dir_name) free(dir_name);
   closedir(dirp);
 
-  return (sig_received == SIGINT) ? -1 : ret;
+  if (sig_received == SIGINT) return -1;
+  return ret;
 }
 
 // Must ensure that nb_parallel is 0 at the end of the execution
@@ -234,7 +244,7 @@ int exec_for_cmd(struct cmd_for *cmd_for, char **vars) {
   if (cmd_for->parallel) { // clean remaining parallel loops
     while (nb_parallel) {
       tmp_ret = wait_cmd(-1);
-      ret = MAX(tmp_ret, ret);
+      ret = max_or_neg(ret, tmp_ret);
       nb_parallel--;
     }
   }
