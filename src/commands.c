@@ -207,8 +207,12 @@ int cmd_oopsie(int argc, char **argv) {
   } else {
     errno = 0;
     val = (int) strtol(argv[1], NULL, 10);
-    if (errno) {
-      perror("oopsie");
+    if (val < 0 || val > 255) {
+      dprintf(2, "oopsie: invalid argument\n");
+      return EXIT_FAILURE;
+    }
+    if (errno) { // Conversion failure in strtol
+      perror("oopsie: strtol");
       return EXIT_FAILURE;
     }
   }
