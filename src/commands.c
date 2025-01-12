@@ -195,24 +195,24 @@ int cmd_autotune(int argc, char **argv) {
  *
  * @return the value passed in argument
  */
-int cmd_oopsie(int argc, char **argv) {
+int cmd_return(int argc, char **argv) {
   if (argc > 2) {
-    dprintf(2, "oopsie: too many arguments\n");
+    dprintf(2, "return: too many arguments\n");
     return EXIT_FAILURE;
   }
 
   int val;
   if (argc == 1) {
-    val = EXIT_FAILURE;
+    val = EXIT_SUCCESS;
   } else {
-    errno = 0;
-    val = (int) strtol(argv[1], NULL, 10);
-    if (val < 0 || val > 255) {
-      dprintf(2, "oopsie: invalid argument\n");
+    char *endptr;
+    val = (int) strtol(argv[1], &endptr, 10);
+    if (*endptr != '\0' || errno != 0 || val < 0 || val > 255) {
+      dprintf(2, "return: invalid argument\n");
       return EXIT_FAILURE;
     }
     if (errno) { // Conversion failure in strtol
-      perror("oopsie: strtol");
+      perror("return: strtol");
       return EXIT_FAILURE;
     }
   }
@@ -234,8 +234,9 @@ int cmd_umask(int argc, char **argv) {
     return EXIT_SUCCESS;
   }
   if (argc == 2) {
-    mode_t new_umask = strtol(argv[1], NULL, 8);
-    if (new_umask > 0777) {
+    char *endptr;
+    mode_t new_umask = strtol(argv[1], &endptr, 8);
+    if (*endptr != '\0' || errno != 0 || new_umask > 0777) {
       dprintf(2, "umask: invalid argument\n");
       return EXIT_FAILURE;
     }
@@ -304,8 +305,8 @@ int call_command_and_wait(int argc, char **argv, int redir[3]) {
     internal_function = cmd_pwd;
   } else if (strcmp(cmd, "autotune") == 0) {
     internal_function = cmd_autotune;
-  } else if (strcmp(cmd, "oopsie") == 0) {
-    internal_function = cmd_oopsie;
+  } else if (strcmp(cmd, "return") == 0) {
+    internal_function = cmd_return;
   } else if (strcmp(cmd, "umask") == 0) {
     internal_function = cmd_umask;
   } else {
