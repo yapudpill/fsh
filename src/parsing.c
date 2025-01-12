@@ -95,7 +95,7 @@ int parse_cmd(struct cmd *root) {
         dprintf(2, "parsing: malformed command\n");
         return -1;
 
-    } else if(strcmp(token, "for") == 0) {
+    } else if (strcmp(token, "for") == 0) {
       if (parse_for(root) == -1) return -1;
 
     } else if (strcmp(token, "if") == 0) {

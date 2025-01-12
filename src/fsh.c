@@ -30,7 +30,11 @@ volatile sig_atomic_t sig_received = 0;
 char prompt[52];
 char *vars[128];
 
-// Updates the prompt (without printing it) according to the current state
+/**
+ * Updates the shell prompt to reflect the current state, including the previous
+ * command's return value and the current working directory. The prompt
+ * is updated but not printed to the screen.
+ */
 void update_prompt(void) {
   char *head = prompt;
 
@@ -62,7 +66,6 @@ void update_prompt(void) {
   }
 
   strcpy(head, "\001\033[00m\002$ ");
-  return;
 }
 
 int init_env_vars() {
@@ -73,7 +76,7 @@ int init_env_vars() {
 int init_wd_vars() {
   PREV_WORKING_DIR = NULL;
 
-  CWD = getcwd(NULL, 0);
+  CWD = getcwd(NULL, 0); // This is possible in glibc, but it has to be free'd later
   if (!CWD) {
     return EXIT_FAILURE;
   }
@@ -93,10 +96,10 @@ int main(int argc, char* argv[]) {
   char *line;
   struct cmd *cmd;
 
-  if(init_wd_vars() == EXIT_FAILURE ||
+  if (init_wd_vars() == EXIT_FAILURE ||
     init_env_vars() == EXIT_FAILURE) return EXIT_FAILURE;
 
-  while(1) {
+  while (1) {
     update_prompt();
     line = readline(prompt);
     if (line == NULL) {
