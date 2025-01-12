@@ -138,7 +138,7 @@ int same_type(char filter_type, char file_type) {
 }
 
 int exec_parallel(struct cmd *cmd, char **vars, int max) {
-  int ret = -1;
+  int ret = 0;
 
   if (nb_parallel == max) {
     ret = wait_cmd(-1);
@@ -173,7 +173,7 @@ int exec_for_aux(struct cmd_for *cmd_for, char **vars) {
   // save the original value to avoid nested for loops overwriting the original
   char *original_var_value = vars[(int) cmd_for->var_name];
 
-  int ret = -1, tmp_ret, file_len, var_size;
+  int ret = 0, tmp_ret, file_len, var_size;
   struct dirent *dentry;
   while ((dentry = readdir(dirp)) && sig_received != SIGINT) {
     if (strcmp(dentry->d_name, ".") == 0 || strcmp(dentry->d_name, "..") == 0)
@@ -192,7 +192,7 @@ int exec_for_aux(struct cmd_for *cmd_for, char **vars) {
       char *old_dir = cmd_for->dir_name;
       cmd_for->dir_name = var;
       tmp_ret = exec_for_aux(cmd_for, vars);
-      ret = MAX(tmp_ret, ret);
+      if(ret != -1) ret = (tmp_ret == -1) ? -1 : MAX(tmp_ret, ret);
       cmd_for->dir_name = old_dir;
     }
 
@@ -213,7 +213,7 @@ int exec_for_aux(struct cmd_for *cmd_for, char **vars) {
     } else {
       tmp_ret = exec_cmd_chain(cmd_for->body, vars);
     }
-    ret = MAX(tmp_ret, ret); // take the max of all the return values
+    if(ret != -1) ret = (tmp_ret == -1) ? -1 : MAX(tmp_ret, ret); // take the max of all the return values
   }
 
   vars[(int) cmd_for->var_name] = original_var_value; // reestablish the old variable
@@ -339,7 +339,7 @@ int exec_head_cmd(struct cmd *cmd_chain, char **vars) {
 
 // Executes a chain of commands, i.e. a pipeline or a structured command with semicolons
 int exec_cmd_chain(struct cmd *cmd_chain, char **vars) {
-  int ret, pipe_count, next_in, pid, i, p[2];
+  int ret = 0, pipe_count, next_in, pid, i, p[2];
   struct cmd *tmp;
 
   while (cmd_chain && sig_received != SIGINT) {
