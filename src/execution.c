@@ -142,7 +142,7 @@ int wait_cmd(int pid) {
 
   if (ret == -1) {
     if(!sig_received) perror("waitpid");
-    return EXIT_FAILURE;
+    return 256;  // to differentiate between error and actual return value
   }
 
   // We want fsh to exit with exit code 255 after a process dies because of a
@@ -170,7 +170,7 @@ int exec_parallel(struct cmd *cmd, char **vars, int max) {
 
   if (nb_parallel == max) {
     ret = wait_cmd(-1);
-    if(ret == EXIT_FAILURE) return EXIT_FAILURE;
+    if(ret == 256) return EXIT_FAILURE;
     nb_parallel--;
   }
 
@@ -267,7 +267,7 @@ int exec_for_cmd(struct cmd_for *cmd_for, char **vars) {
   if (cmd_for->parallel) { // clean remaining parallel loops
     while (nb_parallel) {
       tmp_ret = wait_cmd(-1);
-      if(ret == -1) return EXIT_FAILURE;
+      if(ret == 256) return EXIT_FAILURE;
       ret = max_or_neg(ret, tmp_ret);
       nb_parallel--;
     }
@@ -426,7 +426,7 @@ int exec_cmd_chain(struct cmd *cmd_chain, char **vars) {
 
     // wait of all commands of the pipeline to finish
     for (int i = 0; i < pipe_count; i++) {
-      if(wait_cmd(pids[i]) == EXIT_FAILURE) return EXIT_FAILURE;
+      if(wait_cmd(pids[i]) == 256) return EXIT_FAILURE;
     }
 
     cmd_chain = cmd_chain->next;
