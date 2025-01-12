@@ -170,6 +170,7 @@ int exec_parallel(struct cmd *cmd, char **vars, int max) {
 
   if (nb_parallel == max) {
     ret = wait_cmd(-1);
+    if(ret == EXIT_FAILURE) return EXIT_FAILURE;
     nb_parallel--;
   }
 
@@ -266,6 +267,7 @@ int exec_for_cmd(struct cmd_for *cmd_for, char **vars) {
   if (cmd_for->parallel) { // clean remaining parallel loops
     while (nb_parallel) {
       tmp_ret = wait_cmd(-1);
+      if(ret == -1) return EXIT_FAILURE;
       ret = max_or_neg(ret, tmp_ret);
       nb_parallel--;
     }
@@ -424,7 +426,7 @@ int exec_cmd_chain(struct cmd *cmd_chain, char **vars) {
 
     // wait of all commands of the pipeline to finish
     for (int i = 0; i < pipe_count; i++) {
-      wait_cmd(pids[i]);
+      if(wait_cmd(pids[i]) == EXIT_FAILURE) return EXIT_FAILURE;
     }
 
     cmd_chain = cmd_chain->next;
