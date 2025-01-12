@@ -225,6 +225,8 @@ int exec_for_aux(struct cmd_for *cmd_for, char **vars) {
       cmd_for->dir_name = old_dir;
     }
 
+    if(sig_received == SIGINT) break; // shouldn't move on to executing the body on the directory if the recursion was interrupted
+
     if (cmd_for->filter_ext) { // -e
       int ext_len = strlen(cmd_for->filter_ext);
       if (ext_len >= file_len) continue; // too big to be an extension
