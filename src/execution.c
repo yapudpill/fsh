@@ -16,6 +16,19 @@
 int nb_parallel = 0;
 
 /**
+ * Function to be executed by a subshell if it detects one of its executed
+ * commands was terminated by SIGINT. Kills the subshell itself with SIGINT,
+ * allowing the information that a subprocess has died of SIGINT to be
+ * forwarded to the parent.
+ */
+void raise_sigint() {
+  struct sigaction sa = { 0 };
+  sa.sa_handler = SIG_DFL;
+  if (sigaction(SIGINT, &sa, NULL) != EXIT_SUCCESS) exit(EXIT_FAILURE);
+  raise(SIGINT);
+}
+
+/**
  * Returns the maximum of two integers, unless one of them is negative. If either
  * integer is negative, the negative value is returned.
  */
@@ -160,6 +173,7 @@ int exec_parallel(struct cmd *cmd, char **vars, int max) {
       return EXIT_FAILURE;
     case 0:
       ret = exec_cmd_chain(cmd, vars);
+      if (sig_received == SIGINT) raise_sigint();
       exit(ret);
     default:
       nb_parallel++;
@@ -378,6 +392,8 @@ int exec_cmd_chain(struct cmd *cmd_chain, char **vars) {
           dup2(p[1], 1);
           close(p[0]);
           ret = exec_head_cmd(cmd_chain, vars);
+
+          if (sig_received == SIGINT) raise_sigint();
           exit(ret);
         default:
           pids[i] = pid;
