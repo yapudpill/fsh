@@ -111,6 +111,10 @@ permet d'initialiser un tableau qui contiendra les `pid` des processus lancés.
 Ensuite pour chaque commande, on prépare un pipe, on `fork`, et on `dup2` dans
 l'enfant pour utiliser le descripteur du fichier du pipe, et on y appelle
 `exec_head_cmd` avec la commande correspondante.
+Cela implque que, dans une pipeline de commandes simples, les commandes seront
+exécutées dans des processus petits-fils. Cela offre une plus grande
+flexibilité, notamment pour éventuellement implémenter des pipes entre
+commandes structurées.
 
 Dans le parent, on garde en mémoire le descripteur de la sortie du pipe, qui
 est passé en entrée à la commande suivante. Bien sûr, le pointeur vers la
@@ -118,7 +122,8 @@ commande actuelle est mis à jour dans le parent pour progresser dans la chaîne
 
 Enfin, si une commande n'est pas suivie d'un pipe, on appelle `exec_head_cmd`
 directement dans le parent (mais toujours avec la bonne redirection d'entrée),
-puis on `waitpid` l'ensemble des pids des fork.
+puis on appelle `wait_cmd` plusieurs fois, qui va appeler `waitpid` pour
+l'ensemble des pids des fork.
 
 ## `exec_simple_cmd`: injection de variables et redirection de fichiers
 Ici, on créé un nouvel `argv` à partir du `argv` parsed plus tôt, mais en
@@ -132,11 +137,37 @@ retourné `-1`). On appelle `setup_in_redir` et `setup_out_redir`, qui vont
 utiliser `open` pour ouvrir les fichiers de redirection.
 
 C'est maintenant qu'on appelle `call_command_and_wait`, et finalement on `close`
-les fichiers ouverts et `free` les strings créées.
+les fichiers ouverts et `free` les strings créés.
+
+## `exec_if_else_cmd`: exécution conditionnelle
+Ici, il suffit d'exécuter la commande de test, récupérer sa valeur de retour
+(renvoyée par `exec_cmd_chain`), et exécuter la commande else ou then
+(si existante) selon la valeur.
+
+## `exec_for_cmd`: exécution des boucles for
+`exec_for_cmd` est en réalité un wrapper pour `exec_for_aux`, avec la tâche
+supplémentaire de `wait` les potentiels processus lancés en parallèle qui ne
+se seraient pas encore terminés, et traiter leur valeur de retour.
+
+Dans `exec_for_aux`, on commence par substituer les variables dans le nom du
+répertoire spécifié et on tente d'ouvrir le répertoire. Ensuite, pour chaque
+fichier trouvé, on construit une variable représentant son chemin complet
+(i.e. le nom du fichier précédé du répertoire passé à `for` et '/') puis on
+effectue des filtrages selon les options spécifiées. Si la récursion est
+activée et qu'un sous-répertoire est trouvé, la fonction s'appelle
+récursivement pour traiter le contenu du sous-répertoire.
+
+Après avoir appliqué le filtrage, on exécute le corps de la boucle. Si le
+parallélisme est activé, on va appeler `exec_parallel` plutôt que directement
+`exec_cmd_chain`. `exec_parallel` va lancer la commande en parallèle, sauf si
+la limite de processus est déjà atteinte, auquel cas on attend qu'elle se
+termine. C'est aussi l'occasion de récupérer la valeur de retour de la dernière
+commande lancée en parallèle.
+
 
 ## `call_command_and_wait`: dispatch entre commandes internes et externes
 Ici, on reçoit en argument le `argc` et le `argv` d'une commande interne ou
-externe. Dans le cas d'une commande interne, on utiliser `dup2` trois fois
+externe. Dans le cas d'une commande interne, on utilise `dup2` trois fois
 pour réaliser les redirections sans créer de processus fils afin d'avoir accès
 en modifications à l'état du shell dans les commandes internes (en particulier
 pour `cd`) : une fois pour sauvegarder les descripteurs actuels, une deuxième
@@ -146,3 +177,31 @@ troisième fois pour restaurer les descripteurs précédents.
 Dans le cas d'une commande externe, on appelle `call_external_cmd` qui se
 charge de créer un fork qui va faire ses redirections avec `dup2` et lancer
 la commande avec `execvp`
+
+## Gestion des signaux
+Une variable globale `sig_received` est mise à la valeur d'un signal reçu
+dès qu'un signal `SIGINT` est reçu par `fsh`, ou qu'une commande reçoit un
+signal.
+
+Pour détecter un `SIGINT` reçu par fsh, il suffit d'un handler (`handler`)
+enregistré avec `sigaction` au début du `main` dans `fsh.c`. On en profite
+également pour ignorer les `SIGTERM` à ce moment.
+
+La détection des signaux reçu par les processus fils se fait grâce à
+`wait_cmd`. Dans la majorité du reste du code, on n'appelle que rarement les
+fonctions `wait` directement (sauf si on sait déjà que `fsh` ou un enfant a
+reçu `SIGINT`). À la place, on utilise `wait_cmd`, qui se charge de récupérer
+la valeur de retour de la commande si elle s'est terminée normalement, et de
+mettre à jour `sig_received` si elle a été arrêtée par un signal.
+
+De plus, lorsqu'une commande dans un sous-shell reçoit SIGINT, et uniquement
+cette commande —cette situation ne survient pas lors d'un Ctrl-C, car dans ce
+cas, `SIGINT` est également envoyé au sous-shell lui-même— le sous-shell va
+se tuer avec SIGINT soi-même, ceci afin de transmettre au parent l'information
+qu'un sous-processus est mort par SIGINT. En effet, si on ne fait pas ça, le
+sous-shell va simplement retourner la valeur 255 au parent.
+
+Enfin, dans les boucles et commandes structurées, on vérifie après chaque tour si la
+valeur de `sig_received` vaut `SIGINT`. Dans ce cas, on ne poursuit pas
+l'exécution, et une boucle de `wait(NULL)` dans le `main` se charge de traiter
+les potentiels processus zombies restants.
