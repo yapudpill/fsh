@@ -219,7 +219,9 @@ char **replace_arg_variables(int argc, char **argv, char **vars) {
  *
  * @return The exit status of the child process. Returns -1 if the process was
  *         terminated by a signal, or its exit code if the process exited
- *         normally. If `waitpid` fails, `EXIT_FAILURE` is returned.
+ *         normally. If `waitpid` fails, `256` is returned (a value out of the
+ *         range [0; 255] used for return codes, and different from -1, used when
+ *         terminated by signal)
  */
 int wait_cmd(int pid) {
   int wstat, ret;
