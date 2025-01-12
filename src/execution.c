@@ -1,6 +1,7 @@
 #include "execution.h"
 
 #include <dirent.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -110,18 +111,16 @@ char **replace_arg_variables(int argc, char **argv, char **vars) {
 }
 
 int wait_cmd(int pid) {
-  int wstat;
-  if (waitpid(pid, &wstat, 0) == -1) {
+  int wstat, ret;
+  do {
+    ret = waitpid(pid, &wstat, 0);
+  } while(ret == -1 && errno == EINTR);
+  if (ret == -1) {
     perror("waitpid");
     return EXIT_FAILURE;
   }
-  // We want fsh to exit with exit code 255 after a process dies because of a
-  // signal. However, we would still like to differentiate inside fsh if the
-  // previous process died because of a signal or if it simply returned 255.
-  // So we use return code -1 to indicate a death by signal.
-  // Because exit codes are encoded on 8 bits, it will automatically be
-  // converted to 255 when exiting !
-  return WIFEXITED(wstat) ? WEXITSTATUS(wstat) : -1;
+  // We use negative numbers to represent signals
+  return WIFEXITED(wstat) ? WEXITSTATUS(wstat) : -WTERMSIG(wstat);
 }
 
 int same_type(char filter_type, char file_type) {
@@ -134,8 +133,10 @@ int same_type(char filter_type, char file_type) {
   }
 }
 
+// Attention: a return value of 256 indicates that no child was waited because
+// -1 is a valid return value
 int exec_parallel(struct cmd *cmd, char **vars, int max) {
-  int ret = -1;
+  int ret = 256;
 
   if (nb_parallel == max) {
     ret = wait_cmd(-1);
@@ -148,12 +149,23 @@ int exec_parallel(struct cmd *cmd, char **vars, int max) {
       return EXIT_FAILURE;
     case 0:
       ret = exec_cmd_chain(cmd, vars);
+      if (ret < 0) {
+        reset_handlers();
+        raise(-ret);
+      }
       exit(ret);
     default:
       nb_parallel++;
   }
 
   return ret;
+}
+
+int max_or_neg(int a, int b) {
+  if (a == -SIGINT || b == -SIGINT) return -SIGINT;
+  if (a < 0) return a;
+  if (b < 0) return b;
+  return a > b ? a : b;
 }
 
 int exec_for_aux(struct cmd_for *cmd_for, char **vars) {
@@ -170,9 +182,9 @@ int exec_for_aux(struct cmd_for *cmd_for, char **vars) {
   // save the original value to avoid nested for loops overwriting the original
   char *original_var_value = vars[(int) cmd_for->var_name];
 
-  int ret = -1, tmp_ret, file_len, var_size;
+  int ret = 0, tmp_ret, file_len, var_size;
   struct dirent *dentry;
-  while ((dentry = readdir(dirp))) {
+  while (!STOP_SIG && ret != -SIGINT && (dentry = readdir(dirp))) {
     if (strcmp(dentry->d_name, ".") == 0 || strcmp(dentry->d_name, "..") == 0)
       continue;
     if (!cmd_for->list_all && dentry->d_name[0] == '.') // -A
@@ -189,8 +201,9 @@ int exec_for_aux(struct cmd_for *cmd_for, char **vars) {
       char *old_dir = cmd_for->dir_name;
       cmd_for->dir_name = var;
       tmp_ret = exec_for_aux(cmd_for, vars);
-      ret = MAX(tmp_ret, ret);
+      ret = max_or_neg(tmp_ret, ret);
       cmd_for->dir_name = old_dir;
+      if (STOP_SIG || ret == -SIGINT) break;
     }
 
     if (cmd_for->filter_ext) { // -e
@@ -210,7 +223,7 @@ int exec_for_aux(struct cmd_for *cmd_for, char **vars) {
     } else {
       tmp_ret = exec_cmd_chain(cmd_for->body, vars);
     }
-    ret = MAX(tmp_ret, ret); // take the max of all the return values
+    if (tmp_ret != 256) ret = max_or_neg(tmp_ret, ret); // take the max of all the return values
   }
 
   vars[(int) cmd_for->var_name] = original_var_value; // reestablish the old variable
@@ -231,7 +244,7 @@ int exec_for_cmd(struct cmd_for *cmd_for, char **vars) {
   if (cmd_for->parallel) { // clean remaining parallel loops
     while (nb_parallel) {
       tmp_ret = wait_cmd(-1);
-      ret = MAX(tmp_ret, ret);
+      ret = max_or_neg(tmp_ret, ret);
       nb_parallel--;
     }
   }
@@ -304,6 +317,7 @@ int exec_if_else_cmd(struct cmd_if_else *cmd_if_else, char **vars) {
   int ret = EXIT_SUCCESS;
 
   int test_ret = exec_cmd_chain(cmd_if_else->cmd_test, vars);
+  if (STOP_SIG || test_ret == -SIGINT) return -SIGINT;
 
   if (test_ret == EXIT_SUCCESS) {
     // Test succeeded
@@ -336,10 +350,10 @@ int exec_head_cmd(struct cmd *cmd_chain, char **vars) {
 
 // Executes a chain of commands, i.e. a pipeline or a structured command with semicolons
 int exec_cmd_chain(struct cmd *cmd_chain, char **vars) {
-  int ret, pipe_count, next_in, pid, i, p[2];
+  int ret = 0, pipe_count, next_in, pid, i, p[2];
   struct cmd *tmp;
 
-  while (cmd_chain) {
+  while (!STOP_SIG && ret != -SIGINT && cmd_chain) {
     // count number of pipes
     pipe_count = 0;
     tmp = cmd_chain;

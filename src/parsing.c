@@ -36,18 +36,10 @@ int parse_for(struct cmd *out);
 // Parses an if-else construct
 int parse_if_else(struct cmd *out);
 
-// Save the error code, only if it is the first error encountered
-void update_status(int error_code) {
-  if (!parsing_errno)
-    parsing_errno = error_code;
-}
-
-int parsing_errno;
 char *token;
 
 struct cmd *parse(char *line) {
   // create the root of the syntax tree
-  parsing_errno = 0;
   struct cmd *root = calloc(1, sizeof(struct cmd));
   if (!root) return NULL;
 
@@ -63,7 +55,6 @@ struct cmd *parse(char *line) {
       dprintf(2, "parsing: malformed command\n");
     }
     free_cmd(root);
-    update_status(ERROR_SYNTAX);
     return NULL;
   }
 
@@ -255,13 +246,11 @@ int check_duplicate(struct cmd_for *detail, char *option) {
     ptr = detail->parallel;
   } else {
     dprintf(2, "parsing: unknown loop option %s\n", option);
-    update_status(ERROR_FOR_ARG);
     return -1;
   }
 
   if (ptr) {
     dprintf(2, "parsing: duplicate for loop option %s\n", option);
-    update_status(ERROR_FOR_ARG);
     return -1;
   }
   return 0;
@@ -311,14 +300,12 @@ int parse_for(struct cmd *out) {
       detail->filter_ext = strtok(NULL, " ");
       if (!(detail->filter_ext)) {
         dprintf(2, "parsing: missing or invalid argument for loop option -e\n");
-        update_status(ERROR_FOR_ARG);
         return -1;
       }
     } else if (strcmp(token, "-t") == 0) {
       token = strtok(NULL, " ");
       if (!token || strlen(token) != 1 || !is_ftype(token[0])) {
         dprintf(2, "parsing: missing or invalid argument for loop option -t\n");
-        update_status(ERROR_FOR_ARG);
         return -1;
       }
       detail->filter_type = token[0];
@@ -326,7 +313,6 @@ int parse_for(struct cmd *out) {
       token = strtok(NULL, " ");
       if (!token || sscanf(token, "%d", &(detail->parallel)) != 1) {
         dprintf(2, "parsing: missing or invalid argument for loop option -p\n");
-        update_status(ERROR_FOR_ARG);
         return -1;
       }
     }

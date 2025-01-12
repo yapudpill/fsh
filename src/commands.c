@@ -115,7 +115,7 @@ int cmd_exit(int argc, char **argv) {
 
   int val;
   if (argc == 1) {
-    val = PREV_RETURN_VALUE;
+    val = (PREV_RETURN_VALUE >= 0 ? PREV_RETURN_VALUE : 255);
   } else if (sscanf(argv[1], "%d", &val) != 1) {
     dprintf(2, "exit: invalid argument");
     return EXIT_FAILURE;
@@ -132,18 +132,17 @@ int cmd_exit(int argc, char **argv) {
 int cmd_autotune(int argc, char **argv) {
   size_t ret;
   char c;
-  while ((ret = read(1, &c, 1)) != 0) {
-    if (ret == -1) {
-      if (errno == EINTR) continue;
-      perror("autotune: read");
-      return EXIT_FAILURE;
-    }
+  while ((ret = read(0, &c, 1)) > 0 && !STOP_SIG) {
     if (c == '\n') continue;
     write(1, &c, 1);
     usleep(200000);
     write(1, &c, 1);
     usleep(200000);
     write(1, "\n", 1);
+  }
+  if (ret == -1) {
+    perror("autotune: read");
+    return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;
 }
@@ -177,6 +176,7 @@ int call_external_cmd(int argc, char **argv, int redir[3]) {
       perror("fork");
       return EXIT_FAILURE;
     case 0:
+      reset_handlers();
       for (i = 0; i < 3; i++) {
         if (redir[i] != -2) {
           if (dup2(redir[i], i) == -1) {

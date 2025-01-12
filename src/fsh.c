@@ -1,5 +1,6 @@
 #include "fsh.h"
 
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -7,6 +8,7 @@
 #include <readline/history.h>
 
 #include "cmd_types.h"
+#include "commands.h"
 #include "execution.h"
 #include "parsing.h"
 #ifdef DEBUG
@@ -15,6 +17,9 @@
 
 // global variables' declaration
 char *CWD, *PREV_WORKING_DIR, *HOME;
+volatile sig_atomic_t STOP_SIG;
+// If positive, then is the previous return value. If negative, then is the
+// opposite of the signal number that interrupted the previous command
 int PREV_RETURN_VALUE;
 
 char prompt[52];
@@ -28,7 +33,7 @@ void update_prompt(void) {
   head += sprintf(head, "\001\033[%dm\002", PREV_RETURN_VALUE ? 91 : 32);
 
   int code_len;
-  if (PREV_RETURN_VALUE == -1) {
+  if (PREV_RETURN_VALUE < 0) {
     strcpy(head, "[SIG]");
     code_len = 5;
   } else {
@@ -71,8 +76,23 @@ int init_wd_vars() {
   return EXIT_SUCCESS;
 }
 
+void handle(int signo) {
+  STOP_SIG = 1;
+}
+
+void reset_handlers(void) {
+  struct sigaction sa = { .sa_handler = SIG_DFL };
+  sigaction(SIGTERM, &sa, NULL);
+  sigaction(SIGINT, &sa, NULL);
+}
+
 int main(int argc, char* argv[]) {
   rl_outstream = stderr;
+
+  struct sigaction sa = { .sa_handler = SIG_IGN };
+  sigaction(SIGTERM, &sa, NULL);
+  sa.sa_handler = handle;
+  sigaction(SIGINT, &sa, NULL);
 
   char *line;
   struct cmd *cmd;
@@ -84,27 +104,25 @@ int main(int argc, char* argv[]) {
     update_prompt();
     line = readline(prompt);
     if (line == NULL) {
-      break;
+      cmd_exit(1, NULL);
     }
 
     if (*line != '\0') {
       add_history(line);
       cmd = parse(line);
       if (cmd == NULL) {
-        PREV_RETURN_VALUE = parsing_errno;
+        PREV_RETURN_VALUE = 2; // syntax error
       } else {
 #ifdef DEBUG
         print_cmd(cmd);
 #endif
+        STOP_SIG = 0;
         PREV_RETURN_VALUE = exec_cmd_chain(cmd, vars);
+        if (STOP_SIG) PREV_RETURN_VALUE = -SIGINT;
         free_cmd(cmd);
       }
     }
 
     free(line);
   }
-
-  if (PREV_WORKING_DIR) free(PREV_WORKING_DIR);
-  free(CWD);
-  return PREV_RETURN_VALUE;
 }
