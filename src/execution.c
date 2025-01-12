@@ -1,11 +1,12 @@
 #include "execution.h"
 
+#include <errno.h>
 #include <dirent.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -14,6 +15,29 @@
 
 // Number of currently launched parallel loops
 int nb_parallel = 0;
+
+/**
+ * Function to be executed by a subshell if it detects one of its executed
+ * commands was terminated by SIGINT. Kills the subshell itself with SIGINT,
+ * allowing the information that a subprocess has died of SIGINT to be
+ * forwarded to the parent.
+ */
+void raise_sigint() {
+  struct sigaction sa = { 0 };
+  sa.sa_handler = SIG_DFL;
+  if (sigaction(SIGINT, &sa, NULL) != EXIT_SUCCESS) exit(EXIT_FAILURE);
+  raise(SIGINT);
+}
+
+/**
+ * Returns the maximum of two integers, unless one of them is negative. If either
+ * integer is negative, the negative value is returned.
+ */
+int max_or_neg(int a, int b) {
+  if (a < 0) return a;
+  if (b < 0) return b;
+  return a > b ? a : b;
+}
 
 // Returns a file descriptor to redirect a command output to a file,
 // using options matching the characteristics of the redirection.
@@ -110,17 +134,24 @@ char **replace_arg_variables(int argc, char **argv, char **vars) {
 }
 
 int wait_cmd(int pid) {
-  int wstat;
-  if (waitpid(pid, &wstat, 0) == -1) {
-    perror("waitpid");
-    return EXIT_FAILURE;
+  int wstat, ret;
+
+  do {
+    ret = waitpid(pid, &wstat, 0);
+  } while ( ret == -1 && errno == EINTR); // interruption of wait can lead to problems in parallel execution and much more
+
+  if (ret == -1) {
+    if(!sig_received) perror("waitpid");
+    return 256;  // to differentiate between error and actual return value
   }
+
   // We want fsh to exit with exit code 255 after a process dies because of a
   // signal. However, we would still like to differentiate inside fsh if the
   // previous process died because of a signal or if it simply returned 255.
   // So we use return code -1 to indicate a death by signal.
   // Because exit codes are encoded on 8 bits, it will automatically be
   // converted to 255 when exiting !
+  if(WIFSIGNALED(wstat)) sig_received = WTERMSIG(wstat);
   return WIFEXITED(wstat) ? WEXITSTATUS(wstat) : -1;
 }
 
@@ -135,10 +166,11 @@ int same_type(char filter_type, char file_type) {
 }
 
 int exec_parallel(struct cmd *cmd, char **vars, int max) {
-  int ret = -1;
+  int ret = 0;
 
   if (nb_parallel == max) {
     ret = wait_cmd(-1);
+    if(ret == 256) return EXIT_FAILURE;
     nb_parallel--;
   }
 
@@ -148,6 +180,7 @@ int exec_parallel(struct cmd *cmd, char **vars, int max) {
       return EXIT_FAILURE;
     case 0:
       ret = exec_cmd_chain(cmd, vars);
+      if (sig_received == SIGINT) raise_sigint();
       exit(ret);
     default:
       nb_parallel++;
@@ -170,9 +203,9 @@ int exec_for_aux(struct cmd_for *cmd_for, char **vars) {
   // save the original value to avoid nested for loops overwriting the original
   char *original_var_value = vars[(int) cmd_for->var_name];
 
-  int ret = -1, tmp_ret, file_len, var_size;
+  int ret = 0, tmp_ret, file_len, var_size;
   struct dirent *dentry;
-  while ((dentry = readdir(dirp))) {
+  while ((dentry = readdir(dirp)) && sig_received != SIGINT) {
     if (strcmp(dentry->d_name, ".") == 0 || strcmp(dentry->d_name, "..") == 0)
       continue;
     if (!cmd_for->list_all && dentry->d_name[0] == '.') // -A
@@ -189,9 +222,11 @@ int exec_for_aux(struct cmd_for *cmd_for, char **vars) {
       char *old_dir = cmd_for->dir_name;
       cmd_for->dir_name = var;
       tmp_ret = exec_for_aux(cmd_for, vars);
-      ret = MAX(tmp_ret, ret);
+      ret = max_or_neg(ret, tmp_ret);
       cmd_for->dir_name = old_dir;
     }
+
+    if(sig_received == SIGINT) break; // shouldn't move on to executing the body on the directory if the recursion was interrupted
 
     if (cmd_for->filter_ext) { // -e
       int ext_len = strlen(cmd_for->filter_ext);
@@ -210,7 +245,7 @@ int exec_for_aux(struct cmd_for *cmd_for, char **vars) {
     } else {
       tmp_ret = exec_cmd_chain(cmd_for->body, vars);
     }
-    ret = MAX(tmp_ret, ret); // take the max of all the return values
+    ret = max_or_neg(ret, tmp_ret);
   }
 
   vars[(int) cmd_for->var_name] = original_var_value; // reestablish the old variable
@@ -219,6 +254,7 @@ int exec_for_aux(struct cmd_for *cmd_for, char **vars) {
   if(dir_name != cmd_for->dir_name) free(dir_name);
   closedir(dirp);
 
+  if (sig_received == SIGINT) return -1;
   return ret;
 }
 
@@ -231,7 +267,8 @@ int exec_for_cmd(struct cmd_for *cmd_for, char **vars) {
   if (cmd_for->parallel) { // clean remaining parallel loops
     while (nb_parallel) {
       tmp_ret = wait_cmd(-1);
-      ret = MAX(tmp_ret, ret);
+      if(ret == 256) return EXIT_FAILURE;
+      ret = max_or_neg(ret, tmp_ret);
       nb_parallel--;
     }
   }
@@ -336,10 +373,10 @@ int exec_head_cmd(struct cmd *cmd_chain, char **vars) {
 
 // Executes a chain of commands, i.e. a pipeline or a structured command with semicolons
 int exec_cmd_chain(struct cmd *cmd_chain, char **vars) {
-  int ret, pipe_count, next_in, pid, i, p[2];
+  int ret = 0, pipe_count, next_in, pid, i, p[2];
   struct cmd *tmp;
 
-  while (cmd_chain) {
+  while (cmd_chain && sig_received != SIGINT) {
     // count number of pipes
     pipe_count = 0;
     tmp = cmd_chain;
@@ -363,8 +400,12 @@ int exec_cmd_chain(struct cmd *cmd_chain, char **vars) {
         case 0:
           dup2(next_in, 0);
           dup2(p[1], 1);
+          close(p[1]);
           close(p[0]);
+          close(next_in);
           ret = exec_head_cmd(cmd_chain, vars);
+
+          if (sig_received == SIGINT) raise_sigint();
           exit(ret);
         default:
           pids[i] = pid;
@@ -385,11 +426,11 @@ int exec_cmd_chain(struct cmd *cmd_chain, char **vars) {
 
     // wait of all commands of the pipeline to finish
     for (int i = 0; i < pipe_count; i++) {
-      waitpid(pids[i], NULL, 0);
+      if(wait_cmd(pids[i]) == 256) return EXIT_FAILURE;
     }
 
     cmd_chain = cmd_chain->next;
   }
 
-  return ret;
+  return (sig_received == SIGINT) ? -1 : ret;
 }

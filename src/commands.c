@@ -1,6 +1,7 @@
 #include "commands.h"
 
 #include <errno.h>
+#include <signal.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -177,6 +178,9 @@ int call_external_cmd(int argc, char **argv, int redir[3]) {
       perror("fork");
       return EXIT_FAILURE;
     case 0:
+        struct sigaction sa = { 0 };
+        sa.sa_handler = SIG_DFL;
+        sigaction(SIGTERM, &sa, NULL);
       for (i = 0; i < 3; i++) {
         if (redir[i] != -2) {
           if (dup2(redir[i], i) == -1) {
