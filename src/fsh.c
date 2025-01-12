@@ -19,30 +19,36 @@
 #endif
 
 void sig_handler(int sig) {
-  sig_received = sig;
+  g_sig_received = sig;
 }
 
-// global variables' declaration
-char *CWD, *PREV_WORKING_DIR, *HOME;
-int PREV_RETURN_VALUE;
-volatile sig_atomic_t sig_received = 0;
+// global variables' declaration, prefixed with `g_` to recognize them
+char *g_cwd; // Current working directory
+char *g_prev_wd; // Previous working directory
+char *g_home; // Path to the user's home
+int g_prev_ret_val; // Previous return value
+volatile sig_atomic_t g_sig_received = 0;
 
-char prompt[52];
-char *vars[128];
+char g_prompt[52];
+char *g_vars[128];
 
-// Updates the prompt (without printing it) according to the current state
+/**
+ * Updates the shell prompt to reflect the current state, including the previous
+ * command's return value and the current working directory. The prompt
+ * is updated but not printed to the screen.
+ */
 void update_prompt(void) {
-  char *head = prompt;
+  char *head = g_prompt;
 
   // Return code
-  head += sprintf(head, "\001\033[%dm\002", PREV_RETURN_VALUE ? 91 : 32);
+  head += sprintf(head, "\001\033[%dm\002", g_prev_ret_val ? 91 : 32);
 
   int code_len;
-  if (PREV_RETURN_VALUE < 0) {
+  if (g_prev_ret_val < 0) {
     strcpy(head, "[SIG]");
     code_len = 5;
   } else {
-    code_len = sprintf(head, "[%d]", PREV_RETURN_VALUE);
+    code_len = sprintf(head, "[%d]", g_prev_ret_val);
   }
   head += code_len;
 
@@ -51,30 +57,29 @@ void update_prompt(void) {
   head += 7;
 
   int space_left = 30 - code_len - 2; // Keep 2 bytes for "$ " at the end
-  int len = strlen(CWD);
+  int len = strlen(g_cwd);
   if (len <= space_left) {
-    strcpy(head, CWD);
+    strcpy(head, g_cwd);
     head += len;
   } else { // CWD is too big
     /* Note : 'str + strlen(str) - n' points to the nth character of str
      * starting from the end */
-    head += sprintf(head, "...%s", CWD + len - (space_left - 3));
+    head += sprintf(head, "...%s", g_cwd + len - (space_left - 3));
   }
 
   strcpy(head, "\001\033[00m\002$ ");
-  return;
 }
 
 int init_env_vars() {
-  HOME = getenv("HOME");
+  g_home = getenv("HOME");
   return EXIT_SUCCESS;
 }
 
 int init_wd_vars() {
-  PREV_WORKING_DIR = NULL;
+  g_prev_wd = NULL;
 
-  CWD = getcwd(NULL, 0);
-  if (!CWD) {
+  g_cwd = getcwd(NULL, 0); // This is possible in glibc, but it has to be free'd later
+  if (!g_cwd) {
     return EXIT_FAILURE;
   }
 
@@ -93,12 +98,12 @@ int main(int argc, char* argv[]) {
   char *line;
   struct cmd *cmd;
 
-  if(init_wd_vars() == EXIT_FAILURE ||
+  if (init_wd_vars() == EXIT_FAILURE ||
     init_env_vars() == EXIT_FAILURE) return EXIT_FAILURE;
 
-  while(1) {
+  while (1) {
     update_prompt();
-    line = readline(prompt);
+    line = readline(g_prompt);
     if (line == NULL) {
       break;
     }
@@ -107,19 +112,19 @@ int main(int argc, char* argv[]) {
       add_history(line);
       cmd = parse(line);
       if (cmd == NULL) {
-        PREV_RETURN_VALUE = parsing_errno;
+        g_prev_ret_val = parsing_errno;
       } else {
 #ifdef DEBUG
         print_cmd(cmd);
 #endif
-        PREV_RETURN_VALUE = exec_cmd_chain(cmd, vars);
+        g_prev_ret_val = exec_cmd_chain(cmd, g_vars);
         free_cmd(cmd);
       }
     }
 
-    if (sig_received) {
+    if (g_sig_received) {
       while(wait(NULL) > 0);
-      if(errno == ECHILD) sig_received = 0;
+      if (errno == ECHILD) g_sig_received = 0;
       else {
         perror("wait");
         return EXIT_FAILURE;
@@ -129,7 +134,7 @@ int main(int argc, char* argv[]) {
     free(line);
   }
 
-  if (PREV_WORKING_DIR) free(PREV_WORKING_DIR);
-  free(CWD);
-  return PREV_RETURN_VALUE;
+  if (g_prev_wd) free(g_prev_wd);
+  free(g_cwd);
+  return g_prev_ret_val;
 }

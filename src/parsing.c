@@ -6,7 +6,6 @@
 #include <unistd.h>
 
 #include "cmd_types.h"
-#include "fsh.h"
 
 /* PARSING FUNCTIONS:
 parse and free_cmd are the only exposed functions of this file, they are the
@@ -71,20 +70,21 @@ struct cmd *parse(char *line) {
 }
 
 int parse_cmd(struct cmd *root) {
+  int inside_pipeline = 0;
   while (token && strcmp(token, "{") && strcmp(token, "}")) {
 
     if (strcmp(token, "|") == 0 || strcmp(token, ";") == 0) {
       // if we see ; or |, we add a new command to the chained list of commands
-      int pipe = (strcmp(token, "|") == 0);
+      inside_pipeline = (strcmp(token, "|") == 0);
 
-      if ((pipe && root->cmd_type != CMD_SIMPLE) || root->cmd_type == CMD_EMPTY) return -1;
+      if ((inside_pipeline && root->cmd_type != CMD_SIMPLE) || root->cmd_type == CMD_EMPTY) return -1;
 
       // create and fill new root
       struct cmd *new_root = calloc(1, sizeof(struct cmd));
       if (!new_root) return -1;
 
       // link new root to the old one
-      root->next_type = pipe ? NEXT_PIPE : NEXT_SEMICOLON;
+      root->next_type = inside_pipeline ? NEXT_PIPE : NEXT_SEMICOLON;
       root->next = new_root;
       root = new_root;
 
@@ -95,7 +95,10 @@ int parse_cmd(struct cmd *root) {
         dprintf(2, "parsing: malformed command\n");
         return -1;
 
-    } else if(strcmp(token, "for") == 0) {
+    } else if (strcmp(token, "for") == 0) {
+      // We don't allow piping into for loops, it could be implemented but
+      // needs special care regarding parallel loops
+      if (inside_pipeline) return -1;
       if (parse_for(root) == -1) return -1;
 
     } else if (strcmp(token, "if") == 0) {
@@ -395,5 +398,4 @@ void free_cmd(struct cmd *cmd) {
 
   if (cmd->next_type != NEXT_NONE) free_cmd(cmd->next);
   free(cmd);
-  return;
 }
