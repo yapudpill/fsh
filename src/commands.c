@@ -26,7 +26,7 @@ int cmd_pwd(int argc, char **argv) {
   // every cwd change, it should be safe to assume it already contains the right
   // path, so there is no need for another `getcwd()` call
   if (argc > 1) {
-    dprintf(2, "pwd: too many arguments");
+    dprintf(2, "pwd: too many arguments\n");
     return EXIT_FAILURE;
   }
   dprintf(1, "%s\n", g_cwd);
@@ -52,7 +52,7 @@ int cmd_pwd(int argc, char **argv) {
  */
 int cmd_cd(int argc, char **argv) {
   if (argc > 2) {
-    dprintf(2, "cd: too many arguments");
+    dprintf(2, "cd: too many arguments\n");
     return EXIT_FAILURE;
   }
 
@@ -105,7 +105,7 @@ int cmd_cd(int argc, char **argv) {
  */
 int cmd_ftype(int argc, char **argv) {
   if (argc != 2) {
-    dprintf(2, "ftype: this command takes exactly one argument");
+    dprintf(2, "ftype: this command takes exactly one argument\n");
     return EXIT_FAILURE;
   }
 
@@ -144,7 +144,7 @@ int cmd_ftype(int argc, char **argv) {
  */
 int cmd_exit(int argc, char **argv) {
   if (argc > 2) {
-    dprintf(2, "exit: too many arguments");
+    dprintf(2, "exit: too many arguments\n");
     return EXIT_FAILURE;
   }
 
@@ -152,7 +152,7 @@ int cmd_exit(int argc, char **argv) {
   if (argc == 1) {
     val = g_prev_ret_val;
   } else if (sscanf(argv[1], "%d", &val) != 1) {
-    dprintf(2, "exit: invalid argument");
+    dprintf(2, "exit: invalid argument\n");
     return EXIT_FAILURE;
   }
 
@@ -197,7 +197,7 @@ int cmd_autotune(int argc, char **argv) {
  */
 int cmd_oopsie(int argc, char **argv) {
   if (argc > 2) {
-    dprintf(2, "oopsie: too many arguments");
+    dprintf(2, "oopsie: too many arguments\n");
     return EXIT_FAILURE;
   }
 
