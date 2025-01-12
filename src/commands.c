@@ -228,7 +228,7 @@ int cmd_oopsie(int argc, char **argv) {
  */
 int call_external_cmd(int argc, char **argv, int redir[3]) {
   int pid, i;
-  switch ((pid = fork())) {
+  switch (pid = fork()) {
     case -1:
       perror("fork");
       return EXIT_FAILURE;
@@ -249,7 +249,7 @@ int call_external_cmd(int argc, char **argv, int redir[3]) {
       // We are in the child process, so we have to immediately exit if
       // something goes wrong, otherwise there will be an additional child `fsh`
       // process every time we enter a non-existent command
-      perror("redirect_exec");
+      dprintf(2, "fsh: unknown command %s\n", argv[0]);
       exit(EXIT_FAILURE);
     default:
       return wait_cmd(pid);
