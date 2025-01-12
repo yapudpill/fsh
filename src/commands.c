@@ -29,7 +29,7 @@ int cmd_pwd(int argc, char **argv) {
     dprintf(2, "pwd: too many arguments");
     return EXIT_FAILURE;
   }
-  dprintf(1, "%s\n", CWD);
+  dprintf(1, "%s\n", g_cwd);
   return EXIT_SUCCESS;
 }
 
@@ -53,17 +53,17 @@ int cmd_cd(int argc, char **argv) {
   // change directory
   int ret;
   if (argc == 1) {
-    if (HOME == NULL) {
+    if (g_home == NULL) {
       dprintf(2, "cd: HOME not set\n");
       return EXIT_FAILURE;
     }
-    ret = chdir(HOME);
+    ret = chdir(g_home);
   } else if (strcmp(argv[1], "-") == 0) {
-    if (PREV_WORKING_DIR == NULL) {
+    if (g_prev_wd == NULL) {
       dprintf(2, "cd: no previous working directory\n");
       return EXIT_FAILURE;
     }
-    ret = chdir(PREV_WORKING_DIR);
+    ret = chdir(g_prev_wd);
   } else {
     ret = chdir(argv[1]);
   }
@@ -74,11 +74,11 @@ int cmd_cd(int argc, char **argv) {
   }
 
   // update variables
-  if (PREV_WORKING_DIR) free(PREV_WORKING_DIR);
-  PREV_WORKING_DIR = CWD;
+  if (g_prev_wd) free(g_prev_wd);
+  g_prev_wd = g_cwd;
 
-  CWD = getcwd(NULL, 0);
-  if (CWD == NULL) {
+  g_cwd = getcwd(NULL, 0);
+  if (g_cwd == NULL) {
     // If we ever meet this condition, it means something very wrong has
     // happened, or the directory has been altered at the wrong moment.
 
@@ -144,14 +144,14 @@ int cmd_exit(int argc, char **argv) {
 
   int val;
   if (argc == 1) {
-    val = PREV_RETURN_VALUE;
+    val = g_prev_ret_val;
   } else if (sscanf(argv[1], "%d", &val) != 1) {
     dprintf(2, "exit: invalid argument");
     return EXIT_FAILURE;
   }
 
-  if (PREV_WORKING_DIR) free(PREV_WORKING_DIR);
-  free(CWD);
+  if (g_prev_wd) free(g_prev_wd);
+  free(g_cwd);
 
   exit(val);
 }

@@ -14,7 +14,7 @@
 #include "fsh.h"
 
 // Number of currently launched parallel loops
-int nb_parallel = 0;
+int g_nb_parallel = 0;
 
 /**
  * Function to be executed by a subshell if it detects one of its executed
@@ -231,7 +231,7 @@ int wait_cmd(int pid) {
   } while ( ret == -1 && errno == EINTR); // interruption of wait can lead to problems in parallel execution and much more
 
   if (ret == -1) {
-    if(!sig_received) perror("waitpid");
+    if(!g_sig_received) perror("waitpid");
     return 256;  // to differentiate between error and actual return value
   }
 
@@ -241,7 +241,7 @@ int wait_cmd(int pid) {
   // So we use return code -1 to indicate a death by signal.
   // Because exit codes are encoded on 8 bits, it will automatically be
   // converted to 255 when exiting !
-  if(WIFSIGNALED(wstat)) sig_received = WTERMSIG(wstat);
+  if(WIFSIGNALED(wstat)) g_sig_received = WTERMSIG(wstat);
   return WIFEXITED(wstat) ? WEXITSTATUS(wstat) : -1;
 }
 
@@ -285,10 +285,10 @@ int same_type(char filter_type, char file_type) {
 int exec_parallel(struct cmd *cmd, char **vars, int max) {
   int ret = 0;
 
-  if (nb_parallel == max) {
+  if (g_nb_parallel == max) {
     ret = wait_cmd(-1);
     if(ret == 256) return EXIT_FAILURE;
-    nb_parallel--;
+    g_nb_parallel--;
   }
 
   switch (fork()) {
@@ -297,10 +297,10 @@ int exec_parallel(struct cmd *cmd, char **vars, int max) {
       return EXIT_FAILURE;
     case 0:
       ret = exec_cmd_chain(cmd, vars);
-      if (sig_received == SIGINT) raise_sigint();
+      if (g_sig_received == SIGINT) raise_sigint();
       exit(ret);
     default:
-      nb_parallel++;
+      g_nb_parallel++;
   }
 
   return ret;
@@ -342,7 +342,7 @@ int exec_for_aux(struct cmd_for *cmd_for, char **vars) {
 
   int ret = 0, tmp_ret, file_len, var_size;
   struct dirent *dentry;
-  while ((dentry = readdir(dirp)) && sig_received != SIGINT) {
+  while ((dentry = readdir(dirp)) && g_sig_received != SIGINT) {
     if (strcmp(dentry->d_name, ".") == 0 || strcmp(dentry->d_name, "..") == 0)
       continue;
     if (!cmd_for->list_all && dentry->d_name[0] == '.') // -A
@@ -363,7 +363,7 @@ int exec_for_aux(struct cmd_for *cmd_for, char **vars) {
       cmd_for->dir_name = old_dir;
     }
 
-    if(sig_received == SIGINT) break; // shouldn't move on to executing the body on the directory if the recursion was interrupted
+    if(g_sig_received == SIGINT) break; // shouldn't move on to executing the body on the directory if the recursion was interrupted
 
     if (cmd_for->filter_ext) { // -e
       int ext_len = strlen(cmd_for->filter_ext);
@@ -391,7 +391,7 @@ int exec_for_aux(struct cmd_for *cmd_for, char **vars) {
   if (dir_name != cmd_for->dir_name) free(dir_name);
   closedir(dirp);
 
-  if (sig_received == SIGINT) return -1;
+  if (g_sig_received == SIGINT) return -1;
   return ret;
 }
 
@@ -414,11 +414,11 @@ int exec_for_cmd(struct cmd_for *cmd_for, char **vars) {
   ret = exec_for_aux(cmd_for, vars);
 
   if (cmd_for->parallel) { // clean remaining parallel loops
-    while (nb_parallel) {
+    while (g_nb_parallel) {
       tmp_ret = wait_cmd(-1);
       if(ret == 256) return EXIT_FAILURE;
       ret = max_or_neg(ret, tmp_ret);
-      nb_parallel--;
+      g_nb_parallel--;
     }
   }
 
@@ -543,7 +543,7 @@ int exec_if_else_cmd(struct cmd_if_else *cmd_if_else, char **vars) {
 int exec_head_cmd(struct cmd *cmd_chain, char **vars) {
   switch (cmd_chain->cmd_type) {
     case CMD_EMPTY:
-      return PREV_RETURN_VALUE;
+      return g_prev_ret_val;
     case CMD_SIMPLE:
       return exec_simple_cmd(cmd_chain->detail, vars);
     case CMD_IF_ELSE:
@@ -573,7 +573,7 @@ int exec_cmd_chain(struct cmd *cmd_chain, char **vars) {
   int ret = 0, pipe_count, next_in, pid, i, p[2];
   struct cmd *tmp;
 
-  while (cmd_chain && sig_received != SIGINT) {
+  while (cmd_chain && g_sig_received != SIGINT) {
     // count number of pipes
     pipe_count = 0;
     tmp = cmd_chain;
@@ -602,7 +602,7 @@ int exec_cmd_chain(struct cmd *cmd_chain, char **vars) {
           close(next_in);
           ret = exec_head_cmd(cmd_chain, vars);
 
-          if (sig_received == SIGINT) raise_sigint();
+          if (g_sig_received == SIGINT) raise_sigint();
           exit(ret);
         default:
           pids[i] = pid;
@@ -629,5 +629,5 @@ int exec_cmd_chain(struct cmd *cmd_chain, char **vars) {
     cmd_chain = cmd_chain->next;
   }
 
-  return (sig_received == SIGINT) ? -1 : ret;
+  return (g_sig_received == SIGINT) ? -1 : ret;
 }
